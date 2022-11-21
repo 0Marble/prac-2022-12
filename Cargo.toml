@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "mathparse",
+    "area_calc",
+    "min_find",
+    "spline",
+    "integral_eq",
+    "common",
+    "sandbox"
+]
