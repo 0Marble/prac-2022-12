@@ -30,6 +30,11 @@ pub trait Function2d {
     fn apply(&self, x: f64, y: f64) -> Result<f64, Self::Error>;
 }
 
+pub trait FunctionNd {
+    type Error;
+    fn apply(&self, args: &[f64]) -> Result<f64, Self::Error>;
+}
+
 impl<E, F> Function for F
 where
     F: Fn(f64) -> Result<f64, E>,
@@ -49,5 +54,24 @@ where
 
     fn apply(&self, x: f64, y: f64) -> Result<f64, Self::Error> {
         (self)(x, y)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum NoError {}
+
+impl Function for f64 {
+    type Error = NoError;
+
+    fn apply(&self, _: f64) -> Result<f64, Self::Error> {
+        Ok(*self)
+    }
+}
+
+impl Function2d for f64 {
+    type Error = NoError;
+
+    fn apply(&self, _: f64, _: f64) -> Result<f64, Self::Error> {
+        Ok(*self)
     }
 }

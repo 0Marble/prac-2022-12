@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{MinFinder1d, Minimum};
+use crate::{MinFinder1d, Minimum1d};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GoldenRatioMinFinder {
@@ -30,7 +30,7 @@ impl MinFinder1d for GoldenRatioMinFinder {
         from: f64,
         to: f64,
         func: &dyn common::function::Function<Error = E>,
-    ) -> Result<Minimum, Self::Error>
+    ) -> Result<Minimum1d, Self::Error>
     where
         E: Debug,
     {
@@ -49,7 +49,7 @@ impl MinFinder1d for GoldenRatioMinFinder {
 
         loop {
             if (a - b).abs() < self.min_width || iter_count >= self.max_iter_count {
-                return Ok(Minimum { x: a, y: f_a });
+                return Ok(Minimum1d { x: a, y: f_a });
             }
             iter_count += 1;
 

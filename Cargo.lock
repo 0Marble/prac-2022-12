@@ -9,6 +9,9 @@ version = "0.1.0"
 [[package]]
 name = "common"
 version = "0.1.0"
+dependencies = [
+ "mathparse",
+]
 
 [[package]]
 name = "integral_eq"
@@ -31,6 +34,14 @@ dependencies = [
 [[package]]
 name = "sandbox"
 version = "0.1.0"
+dependencies = [
+ "area_calc",
+ "common",
+ "integral_eq",
+ "mathparse",
+ "min_find",
+ "spline",
+]
 
 [[package]]
 name = "spline"
