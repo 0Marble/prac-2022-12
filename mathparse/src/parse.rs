@@ -7,14 +7,13 @@ pub enum Token {
     Minus,
     Multiply,
     Divide,
-    Variable(String),
-    Function(String),
+    Identifier(String),
     OpenBracket,
     CloseBracket,
     Coma,
 }
 
-pub fn tokenize(mut src: &str, language: &dyn Language) -> Option<Vec<Token>> {
+pub fn tokenize(mut src: &str) -> Option<Vec<Token>> {
     let mut res = vec![];
     loop {
         src = src.trim_start();
@@ -45,11 +44,7 @@ pub fn tokenize(mut src: &str, language: &dyn Language) -> Option<Vec<Token>> {
             res.push(Token::Num(num));
         } else if let Some((identifier, next)) = read_identifier(src) {
             src = next;
-            if language.find_func(&identifier).is_some() {
-                res.push(Token::Function(identifier))
-            } else {
-                res.push(Token::Variable(identifier))
-            }
+            res.push(Token::Identifier(identifier));
         } else if src.is_empty() {
             return Some(res);
         } else {
@@ -111,7 +106,6 @@ fn read_identifier(src: &str) -> Option<(String, &str)> {
 #[test]
 fn tokenizer() {
     let expr = "122+904-23.23*(72-x/4)+pow(2,y)";
-    let lang = DefaultLanguage::default();
 
     let expr_tokenized = vec![
         Token::Num(122.0),
@@ -123,33 +117,32 @@ fn tokenizer() {
         Token::OpenBracket,
         Token::Num(72.0),
         Token::Minus,
-        Token::Variable("x".to_string()),
+        Token::Identifier("x".to_string()),
         Token::Divide,
         Token::Num(4.0),
         Token::CloseBracket,
         Token::Plus,
-        Token::Function("pow".to_string()),
+        Token::Identifier("pow".to_string()),
         Token::OpenBracket,
         Token::Num(2.0),
         Token::Coma,
-        Token::Variable("y".to_string()),
+        Token::Identifier("y".to_string()),
         Token::CloseBracket,
     ];
 
-    assert_eq!(tokenize(expr, &lang), Some(expr_tokenized));
+    assert_eq!(tokenize(expr), Some(expr_tokenized));
 }
 
 /*
     expr = expr ('+' | '-') term | term
-    term = term ('*' | '/' ) factor | -term | factor term | factor
+    term = term ('*' | '/' ) factor | -term | term factor | factor
     factor = number | variable | func '(' arglist ')' | '(' expr ')'
     arglist = expr (',' expr)*
 */
 
-pub fn parse_expr<'a>(
-    tokens: &[Token],
-    language: &'a dyn Language,
-) -> Option<Box<dyn Expression + 'a>> {
+pub fn parse_expr(tokens: &[Token], runtime: &dyn Runtime) -> Option<Box<dyn Expression>> {
+    // println!("parse_expr: {:?}", &tokens);
+
     [Token::Plus, Token::Minus]
         .iter()
         .find_map(|op| {
@@ -157,12 +150,12 @@ pub fn parse_expr<'a>(
                 if t.eq(op) {
                     let expr: Box<dyn Expression> = match op {
                         Token::Plus => Box::new(BasicOp::Plus(
-                            parse_expr(&tokens[..i], language)?,
-                            parse_term(&tokens[i + 1..], language)?,
+                            parse_expr(&tokens[..i], runtime)?,
+                            parse_term(&tokens[i + 1..], runtime)?,
                         )),
                         Token::Minus => Box::new(BasicOp::Minus(
-                            parse_expr(&tokens[..i], language)?,
-                            parse_term(&tokens[i + 1..], language)?,
+                            parse_expr(&tokens[..i], runtime)?,
+                            parse_term(&tokens[i + 1..], runtime)?,
                         )),
                         _ => unreachable!(),
                     };
@@ -172,13 +165,12 @@ pub fn parse_expr<'a>(
                 }
             })
         })
-        .or_else(|| parse_term(tokens, language))
+        .or_else(|| parse_term(tokens, runtime))
 }
 
-fn parse_term<'a>(
-    tokens: &[Token],
-    language: &'a dyn Language,
-) -> Option<Box<dyn Expression + 'a>> {
+fn parse_term(tokens: &[Token], runtime: &dyn Runtime) -> Option<Box<dyn Expression>> {
+    // println!("parse_term: {:?}", &tokens);
+
     [Token::Multiply, Token::Divide]
         .iter()
         .find_map(|op| {
@@ -186,12 +178,12 @@ fn parse_term<'a>(
                 if t.eq(op) {
                     let expr: Box<dyn Expression> = match op {
                         Token::Multiply => Box::new(BasicOp::Multiply(
-                            parse_term(&tokens[..i], language)?,
-                            parse_factor(&tokens[i + 1..], language)?,
+                            parse_term(&tokens[..i], runtime)?,
+                            parse_factor(&tokens[i + 1..], runtime)?,
                         )),
                         Token::Divide => Box::new(BasicOp::Divide(
-                            parse_term(&tokens[..i], language)?,
-                            parse_factor(&tokens[i + 1..], language)?,
+                            parse_term(&tokens[..i], runtime)?,
+                            parse_factor(&tokens[i + 1..], runtime)?,
                         )),
                         _ => unreachable!(),
                     };
@@ -205,60 +197,98 @@ fn parse_term<'a>(
             tokens.first().and_then(|t| match t {
                 Token::Minus if tokens.len() > 1 => Some(Box::new(BasicOp::Negate(parse_term(
                     &tokens[1..],
-                    language,
+                    runtime,
                 )?))
                     as Box<dyn Expression>),
                 _ => None,
             })
         })
-        .or_else(|| parse_implicit_multiplication(tokens, language))
-        .or_else(|| parse_factor(tokens, language))
+        .or_else(|| parse_implicit_multiplication(tokens, runtime))
+        .or_else(|| parse_factor(tokens, runtime))
 }
 
-fn parse_implicit_multiplication<'a>(
+fn parse_implicit_multiplication(
     tokens: &[Token],
-    language: &'a dyn Language,
-) -> Option<Box<dyn Expression + 'a>> {
-    tokens.iter().enumerate().find_map(|(i, _)| {
-        Some(Box::new(BasicOp::Multiply(
-            parse_factor(&tokens[..i], language)?,
-            parse_factor(&tokens[i..], language)?,
-        )) as Box<dyn Expression>)
-    })
-}
+    runtime: &dyn Runtime,
+) -> Option<Box<dyn Expression>> {
+    // println!("parse_implicit_multiplication: {:?}", &tokens);
 
-fn parse_factor<'a>(
-    tokens: &[Token],
-    language: &'a dyn Language,
-) -> Option<Box<dyn Expression + 'a>> {
-    match tokens.first()? {
-        Token::Num(num) if tokens.len() == 1 => Some(Box::new(*num) as Box<dyn Expression>),
-        Token::Function(id)
-            if tokens.get(1) == Some(&Token::OpenBracket)
-                && tokens.last() == Some(&Token::CloseBracket)
-                && tokens.len() > 3
-                && language.find_func(id).is_some() =>
-        {
-            Some(FunctionExpression::new_expression(
-                language,
-                parse_arglist(&tokens[2..tokens.len() - 1], language)?,
-                id.to_owned(),
-            ))
-        }
-        Token::Variable(id) if tokens.len() == 1 && language.find_func(id).is_none() => {
-            Some(Variable::new_expression(id.to_owned()))
-        }
-        Token::OpenBracket if Some(&Token::CloseBracket) == tokens.last() => {
-            parse_expr(&tokens[1..tokens.len() - 1], language)
+    match tokens.iter().last()? {
+        Token::Num(n) => Some(Box::new(BasicOp::Multiply(
+            parse_term(&tokens[..tokens.len() - 1], runtime)?,
+            Box::new(*n),
+        ))),
+        Token::Identifier(var) if !runtime.has_func(var) => Some(Box::new(BasicOp::Multiply(
+            parse_term(&tokens[..tokens.len() - 1], runtime)?,
+            Variable::new_expression(var.to_string()),
+        ))),
+        Token::CloseBracket => {
+            let (corresponding_open_bracket, _, _) = tokens
+                .iter()
+                .enumerate()
+                .rev()
+                .scan(0, |s, (i, t)| match t {
+                    Token::CloseBracket => {
+                        *s += 1;
+                        Some((i, *s - 1, t))
+                    }
+                    Token::OpenBracket => {
+                        *s -= 1;
+                        Some((i, *s, t))
+                    }
+                    _ => Some((i, *s, t)),
+                })
+                .skip(1)
+                .find(|(_, bracket_level, t)| *bracket_level == 0 && *t == &Token::OpenBracket)?;
+
+            if corresponding_open_bracket >= 2 {
+                if let Token::Identifier(id) = &tokens[corresponding_open_bracket - 1] {
+                    if runtime.has_func(id) {
+                        return Some(Box::new(BasicOp::Multiply(
+                            parse_term(&tokens[..corresponding_open_bracket - 1], runtime)?,
+                            parse_factor(&tokens[corresponding_open_bracket - 1..], runtime)?,
+                        )));
+                    }
+                }
+            }
+            Some(Box::new(BasicOp::Multiply(
+                parse_term(&tokens[..corresponding_open_bracket], runtime)?,
+                parse_factor(&tokens[corresponding_open_bracket..], runtime)?,
+            )))
         }
         _ => None,
     }
 }
 
-fn parse_arglist<'a>(
-    tokens: &[Token],
-    language: &'a dyn Language,
-) -> Option<Vec<Box<dyn Expression + 'a>>> {
+fn parse_factor(tokens: &[Token], runtime: &dyn Runtime) -> Option<Box<dyn Expression>> {
+    // println!("parse_factor: {:?}", &tokens);
+
+    match tokens.first()? {
+        Token::Num(num) if tokens.len() == 1 => Some(Box::new(*num) as Box<dyn Expression>),
+        Token::Identifier(id)
+            if tokens.get(1) == Some(&Token::OpenBracket)
+                && tokens.last() == Some(&Token::CloseBracket)
+                && tokens.len() > 3
+                && runtime.has_func(id) =>
+        {
+            Some(FunctionExpression::new_expression(
+                parse_arglist(&tokens[2..tokens.len() - 1], runtime)?,
+                id.to_owned(),
+            ))
+        }
+        Token::Identifier(id) if tokens.len() == 1 && !runtime.has_func(id) => {
+            Some(Variable::new_expression(id.to_owned()))
+        }
+        Token::OpenBracket if Some(&Token::CloseBracket) == tokens.last() => {
+            parse_expr(&tokens[1..tokens.len() - 1], runtime)
+        }
+        _ => None,
+    }
+}
+
+fn parse_arglist(tokens: &[Token], runtime: &dyn Runtime) -> Option<Vec<Box<dyn Expression>>> {
+    // println!("parse_arglist: {:?}", &tokens);
+
     let mut args = vec![];
     let mut coma_iterator = tokens
         .iter()
@@ -284,10 +314,10 @@ fn parse_arglist<'a>(
     loop {
         let next_coma = coma_iterator.next();
         if let Some(i) = next_coma {
-            args.push(parse_expr(&tokens[arg_start..i], language)?);
+            args.push(parse_expr(&tokens[arg_start..i], runtime)?);
             arg_start = i + 1;
         } else {
-            args.push(parse_expr(&tokens[arg_start..], language)?);
+            args.push(parse_expr(&tokens[arg_start..], runtime)?);
             return Some(args);
         }
     }

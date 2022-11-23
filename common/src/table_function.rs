@@ -1,4 +1,3 @@
-pub mod error;
 use std::{
     fs::File,
     io::{BufRead, BufReader, Read},
@@ -7,11 +6,30 @@ use std::{
 
 use crate::function::Function;
 
-use self::error::Error;
+#[derive(Debug, Clone, PartialEq)]
+pub enum Error {
+    TableEmpty,
+    PointOutOfBounds { x: f64, min: f64, max: f64 },
+    IoError(String),
+    InvalidCsv { line: usize },
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::IoError(e.to_string())
+    }
+}
+
+impl From<std::fmt::Error> for Error {
+    fn from(e: std::fmt::Error) -> Self {
+        Error::IoError(e.to_string())
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct TableFunction {
     sorted_table: Vec<(f64, f64)>,
+    eps: f64,
 }
 
 impl TableFunction {
@@ -19,6 +37,22 @@ impl TableFunction {
         table.sort_by(|(x1, _), (x2, _)| x1.partial_cmp(x2).unwrap());
 
         Self {
+            eps: table
+                .first()
+                .map(|(x, _)| x)
+                .and_then(|init| {
+                    table
+                        .iter()
+                        .skip(1)
+                        .scan(*init, |prev, (cur, _)| {
+                            let diff = *cur - *prev;
+                            *prev = *cur;
+                            Some(diff)
+                        })
+                        .reduce(f64::min)
+                        .map(|x| x / (table.len() as f64))
+                })
+                .unwrap_or(0.0),
             sorted_table: table,
         }
     }
@@ -55,6 +89,10 @@ impl TableFunction {
         let f = File::open(path)?;
         Self::from_read(f)
     }
+
+    pub fn to_table(&self) -> Vec<(f64, f64)> {
+        self.sorted_table.clone()
+    }
 }
 
 fn larp(min_x: f64, max_x: f64, x: f64, from_y: f64, to_y: f64) -> f64 {
@@ -76,6 +114,13 @@ impl Function for TableFunction {
             if prev_x <= arg && x >= arg {
                 return Ok(larp(prev_x, x, arg, prev_y, y));
             }
+        }
+
+        if (arg - self.sorted_table[0].0).abs() < self.eps {
+            return Ok(self.sorted_table[0].1);
+        }
+        if (arg - self.sorted_table[self.sorted_table.len() - 1].0).abs() < self.eps {
+            return Ok(self.sorted_table[self.sorted_table.len() - 1].1);
         }
 
         Err(Error::PointOutOfBounds {

@@ -1,3 +1,8 @@
+[package]
+name = "prac202211"
+version = "0.1.0"
+resolver = "2"
+
 [workspace]
 members = [
     "mathparse",
@@ -6,5 +11,13 @@ members = [
     "spline",
     "integral_eq",
     "common",
-    "sandbox"
 ]
+
+[dependencies]
+area_calc = { path = "./area_calc" }
+integral_eq = { path = "./integral_eq" }
+mathparse = { path = "./mathparse" }
+min_find = { path = "./min_find" }
+spline = { path = "./spline" }
+common = { path = "./common" }
+iced = "0.5.2"

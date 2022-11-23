@@ -57,6 +57,17 @@ where
     }
 }
 
+impl<E, F> FunctionNd for F
+where
+    F: Fn(&[f64]) -> Result<f64, E>,
+{
+    type Error = E;
+
+    fn apply(&self, args: &[f64]) -> Result<f64, Self::Error> {
+        (self)(args)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum NoError {}
 

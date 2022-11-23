@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 #[derive(Debug, PartialEq)]
 pub enum Error {
     UndefinedVariable(String),
@@ -11,23 +13,31 @@ pub enum Error {
     MathError(String),
 }
 
+pub trait Runtime {
+    fn get_var(&self, name: &str) -> Option<f64>;
+    fn eval_func(&self, name: &str, args: &[f64]) -> Result<f64, Error>;
+    fn has_func(&self, name: &str) -> bool;
+}
+
 pub trait Expression {
-    fn eval(&self, variables: &[(&str, f64)]) -> Result<f64, Error>;
-    fn compile<'a>(&'a self, variables: &[(&str, f64)]) -> Result<Box<dyn Expression + 'a>, Error>;
-    fn to_number(&self) -> Option<f64>;
+    fn eval(&self, runtime: &dyn Runtime) -> Result<f64, Error>;
+    // fn compile(&self, runtime: &dyn Runtime) -> Result<Box<dyn Expression>, Error>;
+    // fn to_number(&self) -> Option<f64>;
+    fn query_vars(&self) -> HashSet<&str>;
 }
 
 impl Expression for f64 {
-    fn eval(&self, _: &[(&str, f64)]) -> Result<f64, Error> {
+    fn eval(&self, _: &dyn Runtime) -> Result<f64, Error> {
         Ok(*self)
     }
-
-    fn compile<'a>(&'a self, _: &[(&str, f64)]) -> Result<Box<dyn Expression + 'a>, Error> {
-        Ok(Box::new(*self))
-    }
-
-    fn to_number(&self) -> Option<f64> {
-        Some(*self)
+    // fn compile(&self, _: &dyn Runtime) -> Result<Box<dyn Expression>, Error> {
+    //     Ok(Box::new(*self))
+    // }
+    // fn to_number(&self) -> Option<f64> {
+    //     Some(*self)
+    // }
+    fn query_vars(&self) -> HashSet<&str> {
+        HashSet::new()
     }
 }
 
@@ -42,73 +52,56 @@ impl Variable {
 }
 
 impl Expression for Variable {
-    fn eval(&self, variables: &[(&str, f64)]) -> Result<f64, Error> {
-        variables.iter().find(|(v, _)| v.eq(&self.name)).map_or(
-            Err(Error::UndefinedVariable(self.name.clone())),
-            |(_, e)| e.eval(variables),
-        )
+    fn eval(&self, runtime: &dyn Runtime) -> Result<f64, Error> {
+        runtime
+            .get_var(&self.name)
+            .ok_or_else(|| Error::UndefinedVariable(self.name.clone()))
     }
 
-    fn compile<'a>(&'a self, variables: &[(&str, f64)]) -> Result<Box<dyn Expression + 'a>, Error> {
-        Ok(variables
-            .iter()
-            .find(|(v, _)| v.eq(&self.name))
-            .map_or_else(
-                || Variable::new_expression(self.name.clone()),
-                |(_, val)| Box::new(*val),
-            ))
-    }
+    // fn compile(&self, runtime:&dyn Runtime) -> Result<Box<dyn Expression + 'a>, Error>
+    // where
+    //     Self: 'a,
+    // {
+    //     Ok(variables
+    //         .iter()
+    //         .find(|(v, _)| v.eq(&self.name))
+    //         .map_or_else(
+    //             || Variable::new_expression(self.name.clone()),
+    //             |(_, val)| Box::new(*val),
+    //         ))
+    // }
+    // fn to_number(&self) -> Option<f64> {
+    //     None
+    // }
 
-    fn to_number(&self) -> Option<f64> {
-        None
-    }
-}
-
-impl<'a> Expression for &'a str {
-    fn eval(&self, variables: &[(&str, f64)]) -> Result<f64, Error> {
-        variables
-            .iter()
-            .find(|(v, _)| v.eq(self))
-            .map_or(Err(Error::UndefinedVariable(self.to_string())), |(_, e)| {
-                e.eval(variables)
-            })
-    }
-
-    fn compile<'b>(&'b self, variables: &[(&str, f64)]) -> Result<Box<dyn Expression + 'b>, Error> {
-        Ok(variables.iter().find(|(v, _)| v.eq(self)).map_or_else(
-            || Variable::new_expression(self.to_string()),
-            |(_, val)| Box::new(*val),
-        ))
-    }
-
-    fn to_number(&self) -> Option<f64> {
-        None
+    fn query_vars(&self) -> HashSet<&str> {
+        HashSet::from([self.name.as_str()])
     }
 }
 
-pub enum BasicOp<'a> {
-    Plus(Box<dyn Expression + 'a>, Box<dyn Expression + 'a>),
-    Minus(Box<dyn Expression + 'a>, Box<dyn Expression + 'a>),
-    Multiply(Box<dyn Expression + 'a>, Box<dyn Expression + 'a>),
-    Divide(Box<dyn Expression + 'a>, Box<dyn Expression + 'a>),
-    Negate(Box<dyn Expression + 'a>),
+pub enum BasicOp {
+    Plus(Box<dyn Expression>, Box<dyn Expression>),
+    Minus(Box<dyn Expression>, Box<dyn Expression>),
+    Multiply(Box<dyn Expression>, Box<dyn Expression>),
+    Divide(Box<dyn Expression>, Box<dyn Expression>),
+    Negate(Box<dyn Expression>),
 }
 
-impl<'a> Expression for BasicOp<'a> {
-    fn eval(&self, variables: &[(&str, f64)]) -> Result<f64, Error> {
+impl Expression for BasicOp {
+    fn eval(&self, runtime: &dyn Runtime) -> Result<f64, Error> {
         match self {
             BasicOp::Plus(left, right) => left
-                .eval(variables)
-                .and_then(|l| right.eval(variables).map(|r| l + r)),
+                .eval(runtime)
+                .and_then(|l| right.eval(runtime).map(|r| l + r)),
             BasicOp::Minus(left, right) => left
-                .eval(variables)
-                .and_then(|l| right.eval(variables).map(|r| l - r)),
+                .eval(runtime)
+                .and_then(|l| right.eval(runtime).map(|r| l - r)),
             BasicOp::Multiply(left, right) => left
-                .eval(variables)
-                .and_then(|l| right.eval(variables).map(|r| l * r)),
+                .eval(runtime)
+                .and_then(|l| right.eval(runtime).map(|r| l * r)),
             BasicOp::Divide(left, right) => left
-                .eval(variables)
-                .and_then(|l| right.eval(variables).map(|r| (l, r)))
+                .eval(runtime)
+                .and_then(|l| right.eval(runtime).map(|r| (l, r)))
                 .map_or_else(Err, |(l, r)| {
                     if r == 0.0 {
                         Err(Error::MathError("Divide by zero".to_owned()))
@@ -116,308 +109,253 @@ impl<'a> Expression for BasicOp<'a> {
                         Ok(l / r)
                     }
                 }),
-            BasicOp::Negate(r) => r.eval(variables).map(|res| -res),
+            BasicOp::Negate(r) => r.eval(runtime).map(|res| -res),
         }
     }
 
-    fn compile<'b>(&'b self, variables: &[(&str, f64)]) -> Result<Box<dyn Expression + 'b>, Error> {
+    // fn compile<'b>(&self, variables: &[(&str, f64)]) -> Result<Box<dyn Expression + 'b>, Error>
+    // where
+    //     Self: 'b,
+    // {
+    //     match self {
+    //         BasicOp::Plus(l, r) => {
+    //             let l = l.compile(variables)?;
+    //             let r = r.compile(variables)?;
+    //             Ok(match (l.to_number(), r.to_number()) {
+    //                 (None, None) => Box::new(BasicOp::Plus(l, r)),
+    //                 (None, Some(r)) => Box::new(BasicOp::Plus(l, Box::new(r))),
+    //                 (Some(l), None) => Box::new(BasicOp::Plus(Box::new(l), r)),
+    //                 (Some(l), Some(r)) => Box::new(l + r),
+    //             })
+    //         }
+    //         BasicOp::Minus(l, r) => {
+    //             let l = l.compile(variables)?;
+    //             let r = r.compile(variables)?;
+    //             Ok(match (l.to_number(), r.to_number()) {
+    //                 (None, None) => Box::new(BasicOp::Minus(l, r)),
+    //                 (None, Some(r)) => Box::new(BasicOp::Minus(l, Box::new(r))),
+    //                 (Some(l), None) => Box::new(BasicOp::Minus(Box::new(l), r)),
+    //                 (Some(l), Some(r)) => Box::new(l - r),
+    //             })
+    //         }
+    //         BasicOp::Multiply(l, r) => {
+    //             let l = l.compile(variables)?;
+    //             let r = r.compile(variables)?;
+    //             Ok(match (l.to_number(), r.to_number()) {
+    //                 (None, None) => Box::new(BasicOp::Multiply(l, r)),
+    //                 (None, Some(r)) => Box::new(BasicOp::Multiply(l, Box::new(r))),
+    //                 (Some(l), None) => Box::new(BasicOp::Multiply(Box::new(l), r)),
+    //                 (Some(l), Some(r)) => Box::new(l * r),
+    //             })
+    //         }
+    //         BasicOp::Divide(l, r) => {
+    //             let l = l.compile(variables)?;
+    //             let r = r.compile(variables)?;
+
+    //             match (l.to_number(), r.to_number()) {
+    //                 (None, None) => Ok(Box::new(BasicOp::Divide(l, r))),
+    //                 (None, Some(r)) => Ok(Box::new(BasicOp::Divide(l, Box::new(r)))),
+    //                 (Some(l), None) => Ok(Box::new(BasicOp::Divide(Box::new(l), r))),
+    //                 (Some(l), Some(r)) if r != 0.0 => Ok(Box::new(l / r)),
+    //                 _ => Err(Error::MathError("Divide by zero".to_string())),
+    //             }
+    //         }
+    //         BasicOp::Negate(val) => {
+    //             let val = val.compile(variables)?;
+
+    //             if let Some(val) = val.to_number() {
+    //                 Ok(Box::new(-val))
+    //             } else {
+    //                 Ok(Box::new(BasicOp::Negate(val)))
+    //             }
+    //         }
+    //     }
+    // }
+
+    // fn to_number(&self) -> Option<f64> {
+    //     None
+    // }
+
+    fn query_vars(&self) -> HashSet<&str> {
         match self {
-            BasicOp::Plus(l, r) => {
-                let l = l.compile(variables)?;
-                let r = r.compile(variables)?;
-                Ok(match (l.to_number(), r.to_number()) {
-                    (None, None) => Box::new(BasicOp::Plus(l, r)),
-                    (None, Some(r)) => Box::new(BasicOp::Plus(l, Box::new(r))),
-                    (Some(l), None) => Box::new(BasicOp::Plus(Box::new(l), r)),
-                    (Some(l), Some(r)) => Box::new(l + r),
-                })
-            }
-            BasicOp::Minus(l, r) => {
-                let l = l.compile(variables)?;
-                let r = r.compile(variables)?;
-                Ok(match (l.to_number(), r.to_number()) {
-                    (None, None) => Box::new(BasicOp::Minus(l, r)),
-                    (None, Some(r)) => Box::new(BasicOp::Minus(l, Box::new(r))),
-                    (Some(l), None) => Box::new(BasicOp::Minus(Box::new(l), r)),
-                    (Some(l), Some(r)) => Box::new(l - r),
-                })
-            }
-            BasicOp::Multiply(l, r) => {
-                let l = l.compile(variables)?;
-                let r = r.compile(variables)?;
-                Ok(match (l.to_number(), r.to_number()) {
-                    (None, None) => Box::new(BasicOp::Multiply(l, r)),
-                    (None, Some(r)) => Box::new(BasicOp::Multiply(l, Box::new(r))),
-                    (Some(l), None) => Box::new(BasicOp::Multiply(Box::new(l), r)),
-                    (Some(l), Some(r)) => Box::new(l * r),
-                })
-            }
-            BasicOp::Divide(l, r) => {
-                let l = l.compile(variables)?;
-                let r = r.compile(variables)?;
-
-                match (l.to_number(), r.to_number()) {
-                    (None, None) => Ok(Box::new(BasicOp::Divide(l, r))),
-                    (None, Some(r)) => Ok(Box::new(BasicOp::Divide(l, Box::new(r)))),
-                    (Some(l), None) => Ok(Box::new(BasicOp::Divide(Box::new(l), r))),
-                    (Some(l), Some(r)) if r != 0.0 => Ok(Box::new(l / r)),
-                    _ => Err(Error::MathError("Divide by zero".to_string())),
-                }
-            }
-            BasicOp::Negate(val) => {
-                let val = val.compile(variables)?;
-
-                if let Some(val) = val.to_number() {
-                    Ok(Box::new(-val))
-                } else {
-                    Ok(Box::new(BasicOp::Negate(val)))
-                }
-            }
+            BasicOp::Plus(l, r) => l.query_vars().union(&r.query_vars()).copied().collect(),
+            BasicOp::Minus(l, r) => l.query_vars().union(&r.query_vars()).copied().collect(),
+            BasicOp::Multiply(l, r) => l.query_vars().union(&r.query_vars()).copied().collect(),
+            BasicOp::Divide(l, r) => l.query_vars().union(&r.query_vars()).copied().collect(),
+            BasicOp::Negate(l) => l.query_vars(),
         }
     }
-
-    fn to_number(&self) -> Option<f64> {
-        None
-    }
 }
 
-pub trait Function {
-    fn eval(&self, args: &[f64]) -> Result<f64, Error>;
-    fn get_name(&self) -> &str;
-}
-
-pub struct ClosureFunction<F>
-where
-    F: Fn(&[f64]) -> Result<f64, Error>,
-{
-    name: String,
-    func: F,
-}
-
-impl<F> Function for ClosureFunction<F>
-where
-    F: Fn(&[f64]) -> Result<f64, Error>,
-{
-    fn eval(&self, args: &[f64]) -> Result<f64, Error> {
-        (self.func)(args)
-    }
-
-    fn get_name(&self) -> &str {
-        &self.name
-    }
-}
-
-impl<F> ClosureFunction<F>
-where
-    F: Fn(&[f64]) -> Result<f64, Error> + 'static,
-{
-    pub fn new_function(name: String, func: F) -> Box<dyn Function> {
-        Box::new(Self { name, func })
-    }
-}
-
-pub trait Language {
-    fn find_func<'a>(&'a self, func_name: &str) -> Option<&'a dyn Function>;
-}
-
-pub struct FunctionExpression<'a> {
-    language: &'a dyn Language,
-    args: Vec<Box<dyn Expression + 'a>>,
+pub struct FunctionExpression {
+    args: Vec<Box<dyn Expression>>,
     name: String,
 }
 
-impl<'a> FunctionExpression<'a> {
-    pub fn new_expression(
-        language: &'a dyn Language,
-        args: Vec<Box<dyn Expression + 'a>>,
-        name: String,
-    ) -> Box<dyn Expression + 'a> {
-        Box::new(Self {
-            language,
-            args,
-            name,
-        })
+impl FunctionExpression {
+    pub fn new_expression(args: Vec<Box<dyn Expression>>, name: String) -> Box<dyn Expression> {
+        Box::new(Self { args, name })
     }
 }
 
-impl<'a> Expression for FunctionExpression<'a> {
-    fn eval(&self, variables: &[(&str, f64)]) -> Result<f64, Error> {
-        let func = self
-            .language
-            .find_func(&self.name)
-            .ok_or_else(|| Error::UndefinedFunction(self.name.clone()))?;
+impl Expression for FunctionExpression {
+    fn eval(&self, runtime: &dyn Runtime) -> Result<f64, Error> {
         let calculated_args = self
             .args
             .iter()
-            .map(|arg| arg.eval(variables))
-            .collect::<Result<Vec<_>, _>>()?;
-        func.eval(&calculated_args)
-    }
-
-    fn compile<'b>(&'b self, variables: &[(&str, f64)]) -> Result<Box<dyn Expression + 'b>, Error> {
-        let func = self
-            .language
-            .find_func(&self.name)
-            .ok_or_else(|| Error::UndefinedFunction(self.name.clone()))?;
-
-        let compiled_args = self
-            .args
-            .iter()
-            .map(|arg| arg.compile(variables))
+            .map(|arg| arg.eval(runtime))
             .collect::<Result<Vec<_>, _>>()?;
 
-        if let Some(num_args) = compiled_args
+        runtime.eval_func(&self.name, &calculated_args)
+    }
+
+    // fn compile<'b>(&self, variables: &[(&str, f64)]) -> Result<Box<dyn Expression + 'b>, Error>
+    // where
+    //     Self: 'b,
+    // {
+    //     let func = self
+    //         .language
+    //         .borrow()
+    //         .find_func(&self.name)
+    //         .ok_or_else(|| Error::UndefinedFunction(self.name.clone()))?;
+
+    //     let compiled_args = self
+    //         .args
+    //         .iter()
+    //         .map(|arg| arg.compile(variables))
+    //         .collect::<Result<Vec<_>, _>>()?;
+
+    //     if let Some(num_args) = compiled_args
+    //         .iter()
+    //         .map(|a| a.to_number())
+    //         .collect::<Option<Vec<_>>>()
+    //     {
+    //         Ok(Box::new(func.eval(&num_args)?))
+    //     } else {
+    //         Ok(Box::new(Self {
+    //             language: self.language.clone(),
+    //             args: compiled_args,
+    //             name: self.name.clone(),
+    //         }))
+    //         // Ok(FunctionExpression::new_expression(
+    //         //     self.language.borrow(),
+    //         //     compiled_args,
+    //         //     self.name.clone(),
+    //         // ))
+    //     }
+    // }
+
+    // fn to_number(&self) -> Option<f64> {
+    //     None
+    // }
+
+    fn query_vars(&self) -> HashSet<&str> {
+        self.args
             .iter()
-            .map(|a| a.to_number())
-            .collect::<Option<Vec<_>>>()
-        {
-            Ok(Box::new(func.eval(&num_args)?))
-        } else {
-            Ok(FunctionExpression::new_expression(
-                self.language,
-                compiled_args,
-                self.name.clone(),
-            ))
-        }
-    }
-
-    fn to_number(&self) -> Option<f64> {
-        None
+            .map(|a| a.query_vars())
+            .fold(HashSet::new(), |acc, vars| {
+                acc.union(&vars).copied().collect()
+            })
     }
 }
 
-pub struct DefaultLanguage {
-    functions: Vec<Box<dyn Function>>,
+#[derive(Default, Debug)]
+pub struct DefaultRuntime {
+    vars: HashMap<String, f64>,
 }
 
-impl DefaultLanguage {
-    pub fn new(functions: Vec<Box<dyn Function>>) -> Self {
-        Self { functions }
-    }
-}
-
-impl Language for DefaultLanguage {
-    fn find_func<'a>(&'a self, func_name: &str) -> Option<&'a dyn Function> {
-        self.functions
-            .iter()
-            .find(|f| f.get_name().eq(func_name))
-            .map(|f| f.as_ref())
-    }
-}
-
-impl Default for DefaultLanguage {
-    fn default() -> Self {
+impl DefaultRuntime {
+    pub fn new(vars: &[(&str, f64)]) -> Self {
         Self {
-            functions: vec![
-                ClosureFunction::new_function("pow".to_string(), |args| {
-                    if args.len() != 2 {
-                        Err(Error::InvalidArgCount {
-                            op_name: "pow".to_string(),
-                            got_args: args.len(),
-                            expected_args: 2,
-                        })
-                    } else {
-                        Ok(args[0].powf(args[1]))
-                    }
-                }),
-                ClosureFunction::new_function("sqrt".to_string(), |args| {
-                    if args.len() != 1 {
-                        Err(Error::InvalidArgCount {
-                            op_name: "sqrt".to_string(),
-                            got_args: args.len(),
-                            expected_args: 1,
-                        })
-                    } else if args[0] < 0.0 {
-                        Err(Error::MathError("Sqrt of negative".to_owned()))
-                    } else {
-                        Ok(args[0].sqrt())
-                    }
-                }),
-                ClosureFunction::new_function("sin".to_string(), |args| {
-                    if args.len() != 1 {
-                        Err(Error::InvalidArgCount {
-                            op_name: "sin".to_string(),
-                            got_args: args.len(),
-                            expected_args: 1,
-                        })
-                    } else {
-                        Ok(args[0].sin())
-                    }
-                }),
-                ClosureFunction::new_function("cos".to_string(), |args| {
-                    if args.len() != 1 {
-                        Err(Error::InvalidArgCount {
-                            op_name: "cos".to_string(),
-                            got_args: args.len(),
-                            expected_args: 1,
-                        })
-                    } else {
-                        Ok(args[0].cos())
-                    }
-                }),
-                ClosureFunction::new_function("tg".to_string(), |args| {
-                    if args.len() != 1 {
-                        Err(Error::InvalidArgCount {
-                            op_name: "tg".to_string(),
-                            got_args: args.len(),
-                            expected_args: 1,
-                        })
-                    } else {
-                        Ok(args[0].tan())
-                    }
-                }),
-                ClosureFunction::new_function("ctg".to_string(), |args| {
-                    if args.len() != 1 {
-                        Err(Error::InvalidArgCount {
-                            op_name: "ctg".to_string(),
-                            got_args: args.len(),
-                            expected_args: 1,
-                        })
-                    } else {
-                        Ok((std::f64::consts::FRAC_PI_2 - args[0]).tan())
-                    }
-                }),
-                ClosureFunction::new_function("exp".to_string(), |args| {
-                    if args.len() != 1 {
-                        Err(Error::InvalidArgCount {
-                            op_name: "exp".to_string(),
-                            got_args: args.len(),
-                            expected_args: 1,
-                        })
-                    } else {
-                        Ok(args[0].exp())
-                    }
-                }),
-                ClosureFunction::new_function("ln".to_string(), |args| {
-                    if args.len() != 1 {
-                        Err(Error::InvalidArgCount {
-                            op_name: "ln".to_string(),
-                            got_args: args.len(),
-                            expected_args: 1,
-                        })
-                    } else if args[0] < 0.0 {
-                        Err(Error::MathError("Log of negative".to_owned()))
-                    } else {
-                        Ok(args[0].ln())
-                    }
-                }),
-                ClosureFunction::new_function("vec_len".to_string(), |args| {
-                    Ok(args.iter().fold(0.0, |acc, x| acc + x * x).sqrt())
-                }),
-            ],
+            vars: HashMap::from_iter(vars.iter().map(|(n, v)| (n.to_string(), *v))),
         }
     }
 }
 
-#[test]
-fn expression_eval() {
-    let lang = DefaultLanguage::default();
-    let pow = FunctionExpression::new_expression(
-        &lang,
-        vec![Box::new(2.0), Box::new(10.0)],
-        "pow".to_owned(),
-    );
-    let add: Box<dyn Expression> =
-        Box::new(BasicOp::Plus(pow, Variable::new_expression("x".to_owned())));
-    assert_eq!(add.eval(&[("x", 3.0)]), Ok(1027.0));
+impl Runtime for DefaultRuntime {
+    fn get_var(&self, name: &str) -> Option<f64> {
+        self.vars.get(name).copied()
+    }
+
+    fn has_func(&self, name: &str) -> bool {
+        ["sin", "cos", "pow", "exp", "sqrt", "ln"]
+            .into_iter()
+            .any(|v| v.eq(name))
+    }
+
+    fn eval_func(&self, name: &str, args: &[f64]) -> Result<f64, Error> {
+        match name {
+            "sin" => {
+                if args.len() != 1 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "sin".to_string(),
+                        got_args: args.len(),
+                        expected_args: 1,
+                    })
+                } else {
+                    Ok(args[0].sin())
+                }
+            }
+            "cos" => {
+                if args.len() != 1 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "cos".to_string(),
+                        got_args: args.len(),
+                        expected_args: 1,
+                    })
+                } else {
+                    Ok(args[0].cos())
+                }
+            }
+            "pow" => {
+                if args.len() != 2 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "pow".to_string(),
+                        got_args: args.len(),
+                        expected_args: 2,
+                    })
+                } else {
+                    Ok(args[0].powf(args[1]))
+                }
+            }
+            "sqrt" => {
+                if args.len() != 1 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "sqrt".to_string(),
+                        got_args: args.len(),
+                        expected_args: 1,
+                    })
+                } else if args[0] < 0.0 {
+                    Err(Error::MathError("Sqrt of negative".to_owned()))
+                } else {
+                    Ok(args[0].sqrt())
+                }
+            }
+            "exp" => {
+                if args.len() != 1 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "exp".to_string(),
+                        got_args: args.len(),
+                        expected_args: 1,
+                    })
+                } else {
+                    Ok(args[0].exp())
+                }
+            }
+            "ln" => {
+                if args.len() != 1 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "ln".to_string(),
+                        got_args: args.len(),
+                        expected_args: 1,
+                    })
+                } else if args[0] < 0.0 {
+                    Err(Error::MathError("Log of negative".to_owned()))
+                } else {
+                    Ok(args[0].ln())
+                }
+            }
+            _ => Err(Error::UndefinedFunction(name.to_string())),
+        }
+    }
 }
