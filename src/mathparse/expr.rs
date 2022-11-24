@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+};
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
@@ -10,7 +13,7 @@ pub enum Error {
         expected_args: usize,
     },
 
-    MathError(String),
+    Math(String),
 }
 
 pub trait Runtime {
@@ -19,10 +22,8 @@ pub trait Runtime {
     fn has_func(&self, name: &str) -> bool;
 }
 
-pub trait Expression {
+pub trait Expression: Debug {
     fn eval(&self, runtime: &dyn Runtime) -> Result<f64, Error>;
-    // fn compile(&self, runtime: &dyn Runtime) -> Result<Box<dyn Expression>, Error>;
-    // fn to_number(&self) -> Option<f64>;
     fn query_vars(&self) -> HashSet<&str>;
 }
 
@@ -30,17 +31,13 @@ impl Expression for f64 {
     fn eval(&self, _: &dyn Runtime) -> Result<f64, Error> {
         Ok(*self)
     }
-    // fn compile(&self, _: &dyn Runtime) -> Result<Box<dyn Expression>, Error> {
-    //     Ok(Box::new(*self))
-    // }
-    // fn to_number(&self) -> Option<f64> {
-    //     Some(*self)
-    // }
+
     fn query_vars(&self) -> HashSet<&str> {
         HashSet::new()
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Variable {
     name: String,
 }
@@ -58,27 +55,12 @@ impl Expression for Variable {
             .ok_or_else(|| Error::UndefinedVariable(self.name.clone()))
     }
 
-    // fn compile(&self, runtime:&dyn Runtime) -> Result<Box<dyn Expression + 'a>, Error>
-    // where
-    //     Self: 'a,
-    // {
-    //     Ok(variables
-    //         .iter()
-    //         .find(|(v, _)| v.eq(&self.name))
-    //         .map_or_else(
-    //             || Variable::new_expression(self.name.clone()),
-    //             |(_, val)| Box::new(*val),
-    //         ))
-    // }
-    // fn to_number(&self) -> Option<f64> {
-    //     None
-    // }
-
     fn query_vars(&self) -> HashSet<&str> {
         HashSet::from([self.name.as_str()])
     }
 }
 
+#[derive(Debug)]
 pub enum BasicOp {
     Plus(Box<dyn Expression>, Box<dyn Expression>),
     Minus(Box<dyn Expression>, Box<dyn Expression>),
@@ -104,7 +86,7 @@ impl Expression for BasicOp {
                 .and_then(|l| right.eval(runtime).map(|r| (l, r)))
                 .map_or_else(Err, |(l, r)| {
                     if r == 0.0 {
-                        Err(Error::MathError("Divide by zero".to_owned()))
+                        Err(Error::Math("Divide by zero".to_owned()))
                     } else {
                         Ok(l / r)
                     }
@@ -112,69 +94,6 @@ impl Expression for BasicOp {
             BasicOp::Negate(r) => r.eval(runtime).map(|res| -res),
         }
     }
-
-    // fn compile<'b>(&self, variables: &[(&str, f64)]) -> Result<Box<dyn Expression + 'b>, Error>
-    // where
-    //     Self: 'b,
-    // {
-    //     match self {
-    //         BasicOp::Plus(l, r) => {
-    //             let l = l.compile(variables)?;
-    //             let r = r.compile(variables)?;
-    //             Ok(match (l.to_number(), r.to_number()) {
-    //                 (None, None) => Box::new(BasicOp::Plus(l, r)),
-    //                 (None, Some(r)) => Box::new(BasicOp::Plus(l, Box::new(r))),
-    //                 (Some(l), None) => Box::new(BasicOp::Plus(Box::new(l), r)),
-    //                 (Some(l), Some(r)) => Box::new(l + r),
-    //             })
-    //         }
-    //         BasicOp::Minus(l, r) => {
-    //             let l = l.compile(variables)?;
-    //             let r = r.compile(variables)?;
-    //             Ok(match (l.to_number(), r.to_number()) {
-    //                 (None, None) => Box::new(BasicOp::Minus(l, r)),
-    //                 (None, Some(r)) => Box::new(BasicOp::Minus(l, Box::new(r))),
-    //                 (Some(l), None) => Box::new(BasicOp::Minus(Box::new(l), r)),
-    //                 (Some(l), Some(r)) => Box::new(l - r),
-    //             })
-    //         }
-    //         BasicOp::Multiply(l, r) => {
-    //             let l = l.compile(variables)?;
-    //             let r = r.compile(variables)?;
-    //             Ok(match (l.to_number(), r.to_number()) {
-    //                 (None, None) => Box::new(BasicOp::Multiply(l, r)),
-    //                 (None, Some(r)) => Box::new(BasicOp::Multiply(l, Box::new(r))),
-    //                 (Some(l), None) => Box::new(BasicOp::Multiply(Box::new(l), r)),
-    //                 (Some(l), Some(r)) => Box::new(l * r),
-    //             })
-    //         }
-    //         BasicOp::Divide(l, r) => {
-    //             let l = l.compile(variables)?;
-    //             let r = r.compile(variables)?;
-
-    //             match (l.to_number(), r.to_number()) {
-    //                 (None, None) => Ok(Box::new(BasicOp::Divide(l, r))),
-    //                 (None, Some(r)) => Ok(Box::new(BasicOp::Divide(l, Box::new(r)))),
-    //                 (Some(l), None) => Ok(Box::new(BasicOp::Divide(Box::new(l), r))),
-    //                 (Some(l), Some(r)) if r != 0.0 => Ok(Box::new(l / r)),
-    //                 _ => Err(Error::MathError("Divide by zero".to_string())),
-    //             }
-    //         }
-    //         BasicOp::Negate(val) => {
-    //             let val = val.compile(variables)?;
-
-    //             if let Some(val) = val.to_number() {
-    //                 Ok(Box::new(-val))
-    //             } else {
-    //                 Ok(Box::new(BasicOp::Negate(val)))
-    //             }
-    //         }
-    //     }
-    // }
-
-    // fn to_number(&self) -> Option<f64> {
-    //     None
-    // }
 
     fn query_vars(&self) -> HashSet<&str> {
         match self {
@@ -187,6 +106,7 @@ impl Expression for BasicOp {
     }
 }
 
+#[derive(Debug)]
 pub struct FunctionExpression {
     args: Vec<Box<dyn Expression>>,
     name: String,
@@ -208,46 +128,6 @@ impl Expression for FunctionExpression {
 
         runtime.eval_func(&self.name, &calculated_args)
     }
-
-    // fn compile<'b>(&self, variables: &[(&str, f64)]) -> Result<Box<dyn Expression + 'b>, Error>
-    // where
-    //     Self: 'b,
-    // {
-    //     let func = self
-    //         .language
-    //         .borrow()
-    //         .find_func(&self.name)
-    //         .ok_or_else(|| Error::UndefinedFunction(self.name.clone()))?;
-
-    //     let compiled_args = self
-    //         .args
-    //         .iter()
-    //         .map(|arg| arg.compile(variables))
-    //         .collect::<Result<Vec<_>, _>>()?;
-
-    //     if let Some(num_args) = compiled_args
-    //         .iter()
-    //         .map(|a| a.to_number())
-    //         .collect::<Option<Vec<_>>>()
-    //     {
-    //         Ok(Box::new(func.eval(&num_args)?))
-    //     } else {
-    //         Ok(Box::new(Self {
-    //             language: self.language.clone(),
-    //             args: compiled_args,
-    //             name: self.name.clone(),
-    //         }))
-    //         // Ok(FunctionExpression::new_expression(
-    //         //     self.language.borrow(),
-    //         //     compiled_args,
-    //         //     self.name.clone(),
-    //         // ))
-    //     }
-    // }
-
-    // fn to_number(&self) -> Option<f64> {
-    //     None
-    // }
 
     fn query_vars(&self) -> HashSet<&str> {
         self.args
@@ -278,7 +158,7 @@ impl Runtime for DefaultRuntime {
     }
 
     fn has_func(&self, name: &str) -> bool {
-        ["sin", "cos", "pow", "exp", "sqrt", "ln"]
+        ["sin", "cos", "pow", "exp", "sqrt", "ln", "abs"]
             .into_iter()
             .any(|v| v.eq(name))
     }
@@ -326,7 +206,7 @@ impl Runtime for DefaultRuntime {
                         expected_args: 1,
                     })
                 } else if args[0] < 0.0 {
-                    Err(Error::MathError("Sqrt of negative".to_owned()))
+                    Err(Error::Math("Sqrt of negative".to_owned()))
                 } else {
                     Ok(args[0].sqrt())
                 }
@@ -350,9 +230,20 @@ impl Runtime for DefaultRuntime {
                         expected_args: 1,
                     })
                 } else if args[0] < 0.0 {
-                    Err(Error::MathError("Log of negative".to_owned()))
+                    Err(Error::Math("Log of negative".to_owned()))
                 } else {
                     Ok(args[0].ln())
+                }
+            }
+            "abs" => {
+                if args.len() != 1 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "abs".to_string(),
+                        got_args: args.len(),
+                        expected_args: 1,
+                    })
+                } else {
+                    Ok(args[0].abs())
                 }
             }
             _ => Err(Error::UndefinedFunction(name.to_string())),

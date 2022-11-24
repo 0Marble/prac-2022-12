@@ -1,150 +1,126 @@
-use iced::{
-    widget::{button, column, pick_list, row, text, text_input, Rule},
-    Alignment, Element, Length, Sandbox,
-};
-
 use crate::views::{
     area::AreaView, integral_fredholm_1::Fredholm1View, integral_wolterra_2::Wolterra2View,
-    DisplayedResult, View,
+    DisplayedResult, Error, View,
 };
-
-pub struct App {
-    cur_view: usize,
-    views: Vec<Box<dyn View>>,
-    displayed_res: Vec<DisplayedResult>,
-}
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    SwitchToAreaFind,
-    SwitchToWolterra2nd,
-    SwitchToFredholm1st,
-    SetField { name: String, val: String },
+    SwitchToView(usize),
+    EnterInField { name: String, val: String },
+    FieldError { name: String, err: String },
+    RuntimeError { err: String },
     Calculate,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ViewSelection {
-    AreaFind,
-    Fredholm1st,
-    Wolterra2nd,
+pub struct AppState {
+    cur_view_index: usize,
+    views: Vec<Box<dyn View>>,
+    runtime_errors: Vec<String>,
+    field_errors: Vec<(String, String)>,
+    displayed_result: Vec<DisplayedResult>,
 }
 
-impl ViewSelection {
-    pub fn to_name(&self) -> &'static str {
-        match self {
-            ViewSelection::AreaFind => "Find area",
-            ViewSelection::Fredholm1st => "Fredholm 1st",
-            ViewSelection::Wolterra2nd => "Wolterra 2nd",
-        }
-    }
-
-    pub fn from_name(name: &str) -> Self {
-        match name {
-            "Find area" => ViewSelection::AreaFind,
-            "Fredholm 1st" => ViewSelection::Fredholm1st,
-            "Wolterra 2nd" => ViewSelection::Wolterra2nd,
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn to_message(&self) -> Message {
-        match self {
-            ViewSelection::AreaFind => Message::SwitchToAreaFind,
-            ViewSelection::Fredholm1st => Message::SwitchToFredholm1st,
-            ViewSelection::Wolterra2nd => Message::SwitchToWolterra2nd,
-        }
-    }
-}
-
-impl Sandbox for App {
-    type Message = Message;
-
-    fn new() -> Self {
+impl AppState {
+    pub fn new() -> Self {
         Self {
-            cur_view: 0,
+            cur_view_index: 0,
             views: vec![
                 Box::new(AreaView::default()),
                 Box::new(Fredholm1View::default()),
                 Box::new(Wolterra2View::default()),
             ],
-            displayed_res: Vec::new(),
+            runtime_errors: Vec::new(),
+            field_errors: Vec::new(),
+            displayed_result: Vec::new(),
         }
     }
 
-    fn title(&self) -> String {
-        "Prac202211-Lobanov".to_string()
+    fn cur_view(&self) -> &dyn View {
+        self.views[self.cur_view_index].as_ref()
     }
 
-    fn update(&mut self, message: Self::Message) {
-        match message {
-            Message::SwitchToAreaFind => self.cur_view = 0,
-            Message::SwitchToFredholm1st => self.cur_view = 1,
-            Message::SwitchToWolterra2nd => self.cur_view = 2,
-            Message::SetField { name, val } => {
-                self.views[self.cur_view].set_field(&name, val).unwrap()
+    fn cur_view_mut(&mut self) -> &mut dyn View {
+        self.views[self.cur_view_index].as_mut()
+    }
+
+    pub fn update(&mut self, msg: Message) {
+        match msg {
+            Message::SwitchToView(i) => {
+                self.cur_view_index = i;
+                self.runtime_errors.clear();
+                self.field_errors.clear();
             }
-            Message::Calculate => self.displayed_res = self.views[self.cur_view].solve().unwrap(),
+            Message::EnterInField { name, val } => {
+                self.cur_view_mut().set_field(&name, val).map_or_else(
+                    |e| self.field_errors.push((name.clone(), format!("{:?}", e))),
+                    |()| (),
+                )
+            }
+            Message::FieldError { name, err } => self.field_errors.push((name, err)),
+            Message::RuntimeError { err } => self.runtime_errors.push(err),
+            Message::Calculate => {
+                self.runtime_errors.clear();
+                self.field_errors.clear();
+
+                self.displayed_result = self.cur_view().solve().map_or_else(
+                    |e| {
+                        match e {
+                            Error::InvalidField { name, err } => {
+                                self.field_errors.push((name, err))
+                            }
+                            Error::Runtime(e) => self.runtime_errors.push(e),
+                        };
+                        vec![]
+                    },
+                    |res| res,
+                );
+            }
         }
     }
 
-    fn view(&self) -> iced::Element<'_, Self::Message> {
-        let fields = self.views[self.cur_view].get_fields();
-        let selection = vec![
-            ViewSelection::AreaFind.to_name(),
-            ViewSelection::Fredholm1st.to_name(),
-            ViewSelection::Wolterra2nd.to_name(),
-        ];
+    pub fn get_cur_view_fields(&self) -> Vec<String> {
+        self.cur_view().get_fields()
+    }
 
-        row![
-            column![
-                pick_list(
-                    selection.clone(),
-                    selection.get(self.cur_view).copied(),
-                    |name| { ViewSelection::from_name(name).to_message() },
-                ),
-                column(
-                    fields
-                        .into_iter()
-                        .map(|f| {
-                            row![
-                                text(f.clone()),
-                                text_input(
-                                    "",
-                                    self.views[self.cur_view].get_field(&f).unwrap(),
-                                    move |new_val| {
-                                        Message::SetField {
-                                            name: f.clone(),
-                                            val: new_val,
-                                        }
-                                    }
-                                ),
-                            ]
-                        })
-                        .map(Element::from)
-                        .collect(),
-                )
-                .padding(20)
-                .align_items(Alignment::Start),
-                button(text("Calculate")).on_press(Message::Calculate)
-            ]
-            .width(Length::FillPortion(2)),
-            Rule::vertical(1),
-            column(
-                self.displayed_res
-                    .iter()
-                    .filter_map(|r| if let DisplayedResult::Text(t) = r {
-                        Some(text(t))
-                    } else {
-                        None
-                    })
-                    .map(Element::from)
-                    .collect::<Vec<_>>()
-            )
-            .width(Length::FillPortion(3)),
+    pub fn get_cur_view_name(&self) -> String {
+        match self.cur_view_index {
+            0 => "Area".to_string(),
+            1 => "Fredholm 1st Kind".to_string(),
+            2 => "Wolterra 2nd Kind".to_string(),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn get_view_names(&self) -> Vec<String> {
+        vec![
+            "Area".to_string(),
+            "Fredholm 1st Kind".to_string(),
+            "Wolterra 2nd Kind".to_string(),
         ]
-        .padding(20)
-        .align_items(Alignment::Start)
-        .into()
+    }
+
+    pub fn view_name_to_message(&self, name: &str) -> Message {
+        match name {
+            "Area" => Message::SwitchToView(0),
+            "Fredholm 1st Kind" => Message::SwitchToView(1),
+            "Wolterra 2nd Kind" => Message::SwitchToView(2),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn get_result(&self) -> &[DisplayedResult] {
+        &self.displayed_result
+    }
+
+    pub fn get_runtime_errors(&self) -> &[String] {
+        &self.runtime_errors
+    }
+
+    pub fn get_field_errors(&self) -> &[(String, String)] {
+        &self.field_errors
+    }
+
+    pub fn get_field_val(&self, field: &str) -> Option<&str> {
+        self.cur_view().get_field(field)
     }
 }

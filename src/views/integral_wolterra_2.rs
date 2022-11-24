@@ -1,10 +1,10 @@
 use std::convert::TryFrom;
+use std::fmt::Write;
 use std::path::PathBuf;
-use std::{fmt::Write, iter::FromIterator};
 
-use common::function::Function;
-use integral_eq::wolterra::wolterra_2nd_system;
-use mathparse::{parse, DefaultRuntime};
+use crate::common::function::Function;
+use crate::integral_eq::wolterra::wolterra_2nd_system;
+use crate::mathparse::{parse, DefaultRuntime};
 
 use super::{DisplayedResult, Error as ViewError, View};
 
@@ -17,18 +17,7 @@ pub enum Error {
     NField(String),
     LambdaField(String),
     SaveFilePathField(String),
-    KernelInvalidVarCount {
-        expected: usize,
-        got: usize,
-    },
-    RightSideInvalidVarCount {
-        expected: usize,
-        got: usize,
-    },
-    KernelInvalidVarNames {
-        expected: Vec<String>,
-        got: Vec<String>,
-    },
+
     Calculation(String),
 }
 
@@ -63,27 +52,13 @@ impl From<Error> for ViewError {
                 name: "save_file_path".to_string(),
                 err: e,
             },
-            Error::KernelInvalidVarCount { expected, got } => ViewError::InvalidField {
-                name: "kernel".to_string(),
-                err: format!("Invalid argument count, expected {expected}, got {got}"),
-            },
-            Error::RightSideInvalidVarCount { expected, got } => ViewError::InvalidField {
-                name: "right_side".to_string(),
-                err: format!("Invalid argument count, expected {expected}, got {got}"),
-            },
-            Error::KernelInvalidVarNames { expected, got } => ViewError::InvalidField {
-                name: "kernel".to_string(),
-                err: format!(
-                    "Invalid variable names, expected {:?}, got {:?}",
-                    expected, got
-                ),
-            },
+
             Error::Calculation(e) => ViewError::Runtime(e),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Wolterra2View {
     kernel_field: String,
     right_side_field: String,
@@ -92,6 +67,20 @@ pub struct Wolterra2View {
     lambda_field: String,
     n_field: String,
     save_file_path_field: String,
+}
+
+impl Default for Wolterra2View {
+    fn default() -> Self {
+        Self {
+            kernel_field: "exp(x-s)".to_string(),
+            right_side_field: "1".to_string(),
+            from_field: "0".to_string(),
+            to_field: "1".to_string(),
+            lambda_field: "1".to_string(),
+            n_field: "50".to_string(),
+            save_file_path_field: "./func.csv".to_string(),
+        }
+    }
 }
 
 impl View for Wolterra2View {
@@ -159,33 +148,33 @@ impl View for Wolterra2View {
             .map_err(|e| Error::LambdaField(format!("{:?}", e)))?;
 
         let kernel_vars = kernel.query_vars();
-        if kernel_vars.len() != 2 {
-            return Err(Error::KernelInvalidVarCount {
-                expected: 2,
-                got: kernel_vars.len(),
-            })?;
-        }
-
         let right_side_vars = right_side.query_vars();
-        if right_side_vars.len() != 1 {
-            return Err(Error::RightSideInvalidVarCount {
-                expected: 1,
-                got: right_side_vars.len(),
-            })?;
+
+        let outside_var = "x";
+        let inside_var = "s";
+
+        if kernel_vars
+            .iter()
+            .any(|v| v != &outside_var && v != &inside_var)
+        {
+            return Err(ViewError::InvalidField {
+                name: "kernel".to_string(),
+                err: format!(
+                    "Invalid variable names, expected [{inside_var}, {outside_var}] got {:?}",
+                    kernel_vars
+                ),
+            });
         }
 
-        let outside_var = right_side_vars.iter().copied().next().unwrap();
-        if kernel_vars.iter().all(|v| v.ne(&outside_var)) {
-            return Err(Error::KernelInvalidVarNames {
-                expected: vec![outside_var.to_string(), "Any other var".to_string()],
-                got: Vec::from_iter(kernel_vars.iter().copied().map(str::to_string)),
-            })?;
+        if right_side_vars.iter().any(|v| v != &outside_var) {
+            return Err(ViewError::InvalidField {
+                name: "right_side".to_string(),
+                err: format!(
+                    "Invalid variable names, expected {outside_var}, got {:?}",
+                    kernel_vars
+                ),
+            });
         }
-        let inside_var = kernel_vars
-            .iter()
-            .copied()
-            .find(|v| v.ne(&outside_var))
-            .unwrap();
 
         let func = wolterra_2nd_system(
             &|x, s| kernel.eval(&DefaultRuntime::new(&[(outside_var, x), (inside_var, s)])),
@@ -210,11 +199,65 @@ impl View for Wolterra2View {
                     },
                 )?,
             },
-            DisplayedResult::Function {
-                f: Box::new(move |x| func.apply(x).map_err(|e| format!("{:?}", e))),
+            DisplayedResult::Functions(vec![(
+                Box::new(move |x| func.apply(x).map_err(|e| format!("{:?}", e))),
                 from,
                 to,
-            },
+            )]),
         ])
     }
+}
+
+#[test]
+fn wolterra_view() -> Result<(), ViewError> {
+    let mut view = Wolterra2View::default();
+    let fields = vec![
+        ("kernel".to_string(), "exp(x-s)".to_string()),
+        ("right_side".to_string(), "1".to_string()),
+        ("from".to_string(), "0".to_string()),
+        ("to".to_string(), "1".to_string()),
+        ("lambda".to_string(), "1".to_string()),
+        ("n".to_string(), "50".to_string()),
+        ("save_file_path".to_string(), "./func.csv".to_string()),
+    ];
+    assert_eq!(
+        view.get_fields(),
+        fields
+            .iter()
+            .map(|(n, _)| n.to_string())
+            .collect::<Vec<_>>()
+    );
+
+    assert!(fields
+        .iter()
+        .try_for_each(|(name, val)| view.set_field(name, val.to_owned()))
+        .is_ok());
+    assert!(fields
+        .iter()
+        .all(|(name, val)| view.get_field(name).map_or(false, |f| f == val)));
+
+    let res = view.solve()?;
+
+    if let DisplayedResult::TextFile { path, contents: _ } = &res[0] {
+        dbg!(&path);
+        assert_eq!(path, &PathBuf::from("./func.csv"));
+    } else {
+        unreachable!()
+    }
+
+    let eps = 0.05;
+    let n = 10;
+    let actual = |x: f64| 0.5 * ((2.0 * x).exp() + 1.0);
+    if let DisplayedResult::Functions(funcs) = &res[1] {
+        let (f, from, to) = &funcs[0];
+        let step = (to - from) / (n as f64);
+        assert!((1..n)
+            .map(|i| (i as f64) * step + from)
+            .map(|x| (f.apply(x).unwrap() - 1.0).abs())
+            .all(|diff| diff < eps));
+    } else {
+        unreachable!()
+    }
+
+    Ok(())
 }

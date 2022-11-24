@@ -1,4 +1,7 @@
-use mathparse::{parse, DefaultRuntime};
+use std::time::Instant;
+
+use crate::area_calc::calc_area;
+use crate::mathparse::{parse, DefaultRuntime};
 
 use crate::views::DisplayedResult;
 
@@ -88,7 +91,7 @@ impl From<Error> for ViewError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AreaView {
     f1_field: String,
     f2_field: String,
@@ -101,6 +104,24 @@ pub struct AreaView {
     x23_to_field: String,
     eps_field: String,
     max_iter_count_field: String,
+}
+
+impl Default for AreaView {
+    fn default() -> Self {
+        Self {
+            f1_field: "exp(x)+2".to_string(),
+            f2_field: "-2x+8".to_string(),
+            f3_field: "-5/x".to_string(),
+            x12_from_field: "0".to_string(),
+            x12_to_field: "2".to_string(),
+            x13_from_field: "-4".to_string(),
+            x13_to_field: "-1".to_string(),
+            x23_from_field: "-2".to_string(),
+            x23_to_field: "-0.1".to_string(),
+            eps_field: "0.001".to_string(),
+            max_iter_count_field: "1000".to_string(),
+        }
+    }
 }
 
 impl View for AreaView {
@@ -161,9 +182,9 @@ impl View for AreaView {
 
         let f1 = parse(&self.f1_field, &lang)
             .ok_or_else(|| Error::F1Field("Unable to parse f1".to_owned()))?;
-        let f2 = parse(&self.f1_field, &lang)
+        let f2 = parse(&self.f2_field, &lang)
             .ok_or_else(|| Error::F2Field("Unable to parse f2".to_owned()))?;
-        let f3 = parse(&self.f1_field, &lang)
+        let f3 = parse(&self.f3_field, &lang)
             .ok_or_else(|| Error::F3Field("Unable to parse f3".to_owned()))?;
 
         let x12_from = self
@@ -239,7 +260,7 @@ impl View for AreaView {
         let v2 = f2_vars.iter().next().unwrap().to_string();
         let v3 = f3_vars.iter().next().unwrap().to_string();
 
-        let (area, x12, x13, x23) = area_calc::calc_area(
+        let (area, x12, x13, x23) = calc_area(
             &|x| f1.eval(&DefaultRuntime::new(&[(&v1, x)])),
             &|x| f2.eval(&DefaultRuntime::new(&[(&v2, x)])),
             &|x| f3.eval(&DefaultRuntime::new(&[(&v3, x)])),
@@ -256,30 +277,97 @@ impl View for AreaView {
             DisplayedResult::Text(format!(
                 "Area = {area}, x12 = {x12}, x13 = {x13}, x23 = {x23}"
             )),
-            DisplayedResult::Function {
-                f: Box::new(move |x| {
-                    f1.eval(&DefaultRuntime::new(&[(&v1, x)]))
-                        .map_err(|e| format!("{:?}", e))
-                }),
-                from: f64::min(x12_from, x13_from),
-                to: f64::max(x12_to, x13_to),
-            },
-            DisplayedResult::Function {
-                f: Box::new(move |x| {
-                    f2.eval(&DefaultRuntime::new(&[(&v2, x)]))
-                        .map_err(|e| format!("{:?}", e))
-                }),
-                from: f64::min(x12_from, x23_from),
-                to: f64::max(x12_to, x23_to),
-            },
-            DisplayedResult::Function {
-                f: Box::new(move |x| {
-                    f3.eval(&DefaultRuntime::new(&[(&v3, x)]))
-                        .map_err(|e| format!("{:?}", e))
-                }),
-                from: f64::min(x13_from, x23_from),
-                to: f64::max(x13_to, x23_to),
-            },
+            DisplayedResult::Functions(vec![
+                (
+                    Box::new(move |x| {
+                        f1.eval(&DefaultRuntime::new(&[(&v1, x)]))
+                            .map_err(|e| format!("{:?}", e))
+                    }),
+                    f64::min(x12_from, x13_from),
+                    f64::max(x12_to, x13_to),
+                ),
+                (
+                    Box::new(move |x| {
+                        f2.eval(&DefaultRuntime::new(&[(&v2, x)]))
+                            .map_err(|e| format!("{:?}", e))
+                    }),
+                    f64::min(x12_from, x23_from),
+                    f64::max(x12_to, x23_to),
+                ),
+                (
+                    Box::new(move |x| {
+                        f3.eval(&DefaultRuntime::new(&[(&v3, x)]))
+                            .map_err(|e| format!("{:?}", e))
+                    }),
+                    f64::min(x13_from, x23_from),
+                    f64::max(x13_to, x23_to),
+                ),
+            ]),
         ])
     }
+}
+
+#[test]
+fn area() -> Result<(), ViewError> {
+    let mut view = AreaView::default();
+    let fields = vec![
+        ("f1".to_string(), "1+4/(x*x+1)".to_string()),
+        ("f2".to_string(), "pow(2,-x)".to_string()),
+        ("f3".to_string(), "pow(x,3)".to_string()),
+        ("x12_from".to_string(), "-2".to_string()),
+        ("x12_to".to_string(), "-1".to_string()),
+        ("x13_from".to_string(), "0.5".to_string()),
+        ("x13_to".to_string(), "1.5".to_string()),
+        ("x23_from".to_string(), "0.5".to_string()),
+        ("x23_to".to_string(), "1.5".to_string()),
+        ("eps".to_string(), "0.001".to_string()),
+        ("max_iter_count".to_string(), "1000".to_string()),
+    ];
+
+    assert_eq!(
+        view.get_fields(),
+        fields
+            .iter()
+            .map(|(n, _)| n.to_string())
+            .collect::<Vec<_>>()
+    );
+
+    fields
+        .iter()
+        .try_for_each(|(name, val)| view.set_field(name, val.to_owned()))?;
+    assert!(fields
+        .iter()
+        .all(|(name, val)| view.get_field(name).map_or(false, |f| f == val)));
+
+    let res = view.solve()?;
+    if let DisplayedResult::Text(t) = &res[0] {
+        assert_eq!(t, "Area = 6.5901592526739865, x12 = -1.3078612427555194, x13 = 1.343650541755197, x23 = 0.826214727131511");
+    } else {
+        unreachable!();
+    }
+
+    let actual_funcs = [
+        (|x: f64| 1.0 + 4.0 / (x * x + 1.0)) as fn(f64) -> f64,
+        (|x: f64| 2.0f64.powf(-x)) as fn(f64) -> f64,
+        (|x: f64| x * x * x) as fn(f64) -> f64,
+    ];
+
+    let eps = 0.001;
+    let n = 10;
+
+    if let DisplayedResult::Functions(funcs) = &res[1] {
+        for i in 0..3 {
+            let (f, from, to) = &funcs[i];
+            let actual = actual_funcs[i];
+            let step = (to - from) / (n as f64);
+            assert!((0..n)
+                .map(|i| (i as f64) * step + from)
+                .map(|x| (actual(x) - f.apply(x).unwrap()).abs())
+                .all(|diff| diff < eps))
+        }
+    } else {
+        unreachable!()
+    }
+
+    Ok(())
 }

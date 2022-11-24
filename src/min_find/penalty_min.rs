@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
-use common::function::Function;
+use crate::common::function::Function;
 
-use crate::{golden_ratio_min::golden_ratio_min, Minimum1d};
+use super::{golden_ratio_min::golden_ratio_min, Minimum1d};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {

@@ -1,23 +1,9 @@
 [package]
-name = "prac202211"
+name = "prac-2022-11"
 version = "0.1.0"
-resolver = "2"
+edition = "2021"
 
-[workspace]
-members = [
-    "mathparse",
-    "area_calc",
-    "min_find",
-    "spline",
-    "integral_eq",
-    "common",
-]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-area_calc = { path = "./area_calc" }
-integral_eq = { path = "./integral_eq" }
-mathparse = { path = "./mathparse" }
-min_find = { path = "./min_find" }
-spline = { path = "./spline" }
-common = { path = "./common" }
-iced = "0.5.2"
+iced = { version = "0.5.2", features = ["canvas"] }

@@ -1,7 +1,7 @@
 mod first_kind;
 mod second_kind;
 
-use common::table_function::Error as TableFunctionError;
+use crate::common::table_function::Error as TableFunctionError;
 pub use first_kind::*;
 pub use second_kind::*;
 

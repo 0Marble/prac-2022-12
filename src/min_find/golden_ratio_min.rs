@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 
-use crate::Minimum1d;
+use crate::common::function::Function;
+
+use super::Minimum1d;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
@@ -11,7 +13,7 @@ pub enum Error {
 pub fn golden_ratio_min<E>(
     from: f64,
     to: f64,
-    func: &dyn common::function::Function<Error = E>,
+    func: &dyn Function<Error = E>,
     min_width: f64,
     max_iter_count: usize,
 ) -> Result<Minimum1d, Error>

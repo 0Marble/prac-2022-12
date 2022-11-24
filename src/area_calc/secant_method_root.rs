@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
-use common::function::Function;
+use crate::common::function::Function;
 
-use crate::RootError;
+use super::RootError;
 
 pub fn root<E>(
     f: &dyn Function<Error = E>,

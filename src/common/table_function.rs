@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use crate::function::Function;
+use super::function::Function;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {

@@ -1,7 +1,7 @@
-use common::{function::*, table_function::TableFunction};
+use crate::common::{function::*, table_function::TableFunction};
 use std::fmt::Debug;
 
-use crate::wolterra::Error;
+use super::Error;
 
 pub fn wolterra_2nd_system<E1, E2>(
     kernel: &dyn Function2d<Error = E1>,

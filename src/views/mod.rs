@@ -6,15 +6,10 @@ pub mod penalty_min;
 
 use std::path::PathBuf;
 
-use common::function::{Function, FunctionNd};
+use crate::common::function::{Function, FunctionNd};
 
 pub enum DisplayedResult {
     Text(String),
-    Function {
-        f: Box<dyn Function<Error = String>>,
-        from: f64,
-        to: f64,
-    },
     FunctionNDim {
         f: Box<dyn FunctionNd<Error = String>>,
         from: Vec<f64>,
@@ -24,6 +19,7 @@ pub enum DisplayedResult {
         path: PathBuf,
         contents: String,
     },
+    Functions(Vec<(Box<dyn Function<Error = String>>, f64, f64)>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

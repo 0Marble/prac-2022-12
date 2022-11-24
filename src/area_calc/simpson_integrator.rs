@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
-use common::function::Function;
+use crate::common::function::Function;
 
-use crate::Error;
+use super::Error;
 
 pub fn integrate_step<E>(
     f: &dyn Function<Error = E>,

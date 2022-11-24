@@ -1,9 +1,12 @@
-use std::fmt::Debug;
+use std::{
+    fmt::Debug,
+    time::{Duration, Instant},
+};
 
 mod secant_method_root;
 mod simpson_integrator;
 
-use common::function::Function;
+use crate::common::function::Function;
 use secant_method_root::root;
 use simpson_integrator::integrate_step;
 
