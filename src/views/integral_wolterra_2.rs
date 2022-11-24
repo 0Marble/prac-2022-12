@@ -253,7 +253,7 @@ fn wolterra_view() -> Result<(), ViewError> {
         let step = (to - from) / (n as f64);
         assert!((1..n)
             .map(|i| (i as f64) * step + from)
-            .map(|x| (f.apply(x).unwrap() - 1.0).abs())
+            .map(|x| (f.apply(x).unwrap() - actual(x)).abs())
             .all(|diff| diff < eps));
     } else {
         unreachable!()
