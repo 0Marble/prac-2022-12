@@ -71,7 +71,7 @@ where
 
 #[test]
 fn find_min() -> Result<(), Error> {
-    #[derive(Debug, Clone, PartialEq)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum DummyError {}
 
     let f = |x: f64| -> Result<f64, DummyError> {

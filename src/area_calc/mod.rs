@@ -1,7 +1,4 @@
-use std::{
-    fmt::Debug,
-    time::{Duration, Instant},
-};
+use std::fmt::Debug;
 
 mod secant_method_root;
 mod simpson_integrator;
@@ -17,7 +14,7 @@ pub enum RootError {
     ItersEnded { from: f64, to: f64 },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     FunctionError(String),
     RootError(String),
@@ -25,18 +22,28 @@ pub enum Error {
     RootEpsTooBig,
 }
 
+pub struct Area<'a, E> {
+    pub area: f64,
+    pub x12: f64,
+    pub x13: f64,
+    pub x23: f64,
+    pub f1: &'a dyn Function<Error = E>,
+    pub f2: &'a dyn Function<Error = E>,
+    pub f3: &'a dyn Function<Error = E>,
+}
+
 #[allow(clippy::too_many_arguments)]
-pub fn calc_area<E>(
-    a: &dyn Function<Error = E>,
-    b: &dyn Function<Error = E>,
-    c: &dyn Function<Error = E>,
+pub fn calc_area<'a, E>(
+    a: &'a dyn Function<Error = E>,
+    b: &'a dyn Function<Error = E>,
+    c: &'a dyn Function<Error = E>,
     ab_root: [f64; 2],
     ac_root: [f64; 2],
     bc_root: [f64; 2],
     root_start_eps: f64,
     area_eps: f64,
     max_iter_count: usize,
-) -> Result<(f64, f64, f64, f64), Error>
+) -> Result<Area<'a, E>, Error>
 where
     E: Debug,
 {
@@ -63,7 +70,17 @@ where
         };
 
         match res {
-            Ok(area) => return Ok((area, abx, acx, bcx)),
+            Ok(area) => {
+                return Ok(Area {
+                    area,
+                    x12: sides[0].0,
+                    x13: sides[1].0,
+                    x23: sides[2].0,
+                    f1: sides[2].2,
+                    f2: sides[1].2,
+                    f3: sides[0].2,
+                })
+            }
             Err(e) if e == Error::RootEpsTooBig || e == Error::ItersEnded => root_eps *= 0.1,
             Err(e) => return Err(e),
         }
@@ -214,7 +231,7 @@ fn area_bottom() -> Result<(), Error> {
     let g = |x: f64| -> Result<f64, RootError> { Ok(2.0f64.powf(-x)) };
     let h = |x: f64| -> Result<f64, RootError> { Ok(x * x * x) };
 
-    let (res, _, _, _) = calc_area(
+    let res = calc_area(
         &f,
         &g,
         &h,
@@ -227,7 +244,7 @@ fn area_bottom() -> Result<(), Error> {
     )?;
 
     let actual = 6.5910711;
-    assert!((res - actual).abs() < 0.001);
+    assert!((res.area - actual).abs() < 0.001);
 
     Ok(())
 }
@@ -238,7 +255,7 @@ fn area_top() -> Result<(), Error> {
     let g = |x: f64| -> Result<f64, RootError> { Ok(-2.0 * x + 8.0) };
     let h = |x: f64| -> Result<f64, RootError> { Ok(-5.0 / x) };
 
-    let (res, _, _, _) = calc_area(
+    let res = calc_area(
         &f,
         &g,
         &h,
@@ -251,7 +268,7 @@ fn area_top() -> Result<(), Error> {
     )?;
 
     let actual = 9.807;
-    assert!((res - actual).abs() < 0.001);
+    assert!((res.area - actual).abs() < 0.001);
 
     Ok(())
 }

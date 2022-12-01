@@ -1,2 +1,16 @@
-pub mod fredholm;
-pub mod wolterra;
+mod conjugate_gradients;
+pub mod fredholm_first_kind;
+pub mod wolterra_second_kind;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Error {
+    FunctionError(String),
+}
+
+use crate::common::table_function::Error as TableFunctionError;
+
+impl From<TableFunctionError> for Error {
+    fn from(e: TableFunctionError) -> Self {
+        Self::FunctionError(format!("{:?}", e))
+    }
+}

@@ -1,126 +1,128 @@
-use crate::views::{
-    area::AreaView, integral_fredholm_1::Fredholm1View, integral_wolterra_2::Wolterra2View,
-    DisplayedResult, Error, View,
+use std::collections::LinkedList;
+
+use crate::problems::{
+    area_calc::AreaCalcProblemCreator, fredholm_1st::Fredholm1stProblemCreator,
+    wolterra_2nd::Wolterra2ndProblemCreator, Problem, ProblemCreator, Solution, ValidationError,
 };
 
-#[derive(Debug, Clone)]
-pub enum Message {
-    SwitchToView(usize),
-    EnterInField { name: String, val: String },
-    FieldError { name: String, err: String },
-    RuntimeError { err: String },
-    Calculate,
+pub struct AppState {
+    problem_creators: Vec<Box<dyn ProblemCreator>>,
+    cur_problem_creator: usize,
+    prepared_problem: Option<Box<dyn Problem>>,
+    validation_errors: Vec<ValidationError>,
+    solutions: LinkedList<Solution>,
 }
 
-pub struct AppState {
-    cur_view_index: usize,
-    views: Vec<Box<dyn View>>,
-    runtime_errors: Vec<String>,
-    field_errors: Vec<(String, String)>,
-    displayed_result: Vec<DisplayedResult>,
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            problem_creators: vec![
+                Box::new(Fredholm1stProblemCreator::default()),
+                Box::new(AreaCalcProblemCreator::default()),
+                Box::new(Wolterra2ndProblemCreator::default()),
+            ],
+            cur_problem_creator: 0,
+            prepared_problem: None,
+            validation_errors: Vec::new(),
+            solutions: LinkedList::new(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ProblemName {
+    FredholmFirst,
+    AreaCalc,
+    WolterraSecond,
+}
+
+impl ProblemName {
+    fn to_index(&self) -> usize {
+        match self {
+            ProblemName::FredholmFirst => 0,
+            ProblemName::AreaCalc => 1,
+            ProblemName::WolterraSecond => 2,
+        }
+    }
+    fn from_index(index: usize) -> Option<Self> {
+        match index {
+            0 => Some(ProblemName::FredholmFirst),
+            1 => Some(ProblemName::AreaCalc),
+            2 => Some(ProblemName::WolterraSecond),
+            _ => None,
+        }
+    }
+}
+
+impl ToString for ProblemName {
+    fn to_string(&self) -> String {
+        match self {
+            ProblemName::FredholmFirst => "Fredholm first kind".to_string(),
+            ProblemName::AreaCalc => "Area".to_string(),
+            ProblemName::WolterraSecond => "Wolterra second kind".to_string(),
+        }
+    }
 }
 
 impl AppState {
-    pub fn new() -> Self {
-        Self {
-            cur_view_index: 0,
-            views: vec![
-                Box::new(AreaView::default()),
-                Box::new(Fredholm1View::default()),
-                Box::new(Wolterra2View::default()),
-            ],
-            runtime_errors: Vec::new(),
-            field_errors: Vec::new(),
-            displayed_result: Vec::new(),
-        }
+    fn cur(&self) -> &dyn ProblemCreator {
+        self.problem_creators[self.cur_problem_creator].as_ref()
+    }
+    fn mut_cur(&mut self) -> &mut dyn ProblemCreator {
+        self.problem_creators[self.cur_problem_creator].as_mut()
     }
 
-    fn cur_view(&self) -> &dyn View {
-        self.views[self.cur_view_index].as_ref()
-    }
-
-    fn cur_view_mut(&mut self) -> &mut dyn View {
-        self.views[self.cur_view_index].as_mut()
-    }
-
-    pub fn update(&mut self, msg: Message) {
-        match msg {
-            Message::SwitchToView(i) => {
-                self.cur_view_index = i;
-                self.runtime_errors.clear();
-                self.field_errors.clear();
-            }
-            Message::EnterInField { name, val } => {
-                self.cur_view_mut().set_field(&name, val).map_or_else(
-                    |e| self.field_errors.push((name.clone(), format!("{:?}", e))),
-                    |()| (),
-                )
-            }
-            Message::FieldError { name, err } => self.field_errors.push((name, err)),
-            Message::RuntimeError { err } => self.runtime_errors.push(err),
-            Message::Calculate => {
-                self.runtime_errors.clear();
-                self.field_errors.clear();
-
-                self.displayed_result = self.cur_view().solve().map_or_else(
-                    |e| {
-                        match e {
-                            Error::InvalidField { name, err } => {
-                                self.field_errors.push((name, err))
-                            }
-                            Error::Runtime(e) => self.runtime_errors.push(e),
-                        };
-                        vec![]
-                    },
-                    |res| res,
-                );
-            }
-        }
-    }
-
-    pub fn get_cur_view_fields(&self) -> Vec<String> {
-        self.cur_view().get_fields()
-    }
-
-    pub fn get_cur_view_name(&self) -> String {
-        match self.cur_view_index {
-            0 => "Area".to_string(),
-            1 => "Fredholm 1st Kind".to_string(),
-            2 => "Wolterra 2nd Kind".to_string(),
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn get_view_names(&self) -> Vec<String> {
+    pub fn get_problems(&self) -> Vec<ProblemName> {
         vec![
-            "Area".to_string(),
-            "Fredholm 1st Kind".to_string(),
-            "Wolterra 2nd Kind".to_string(),
+            ProblemName::FredholmFirst,
+            ProblemName::AreaCalc,
+            ProblemName::WolterraSecond,
         ]
     }
+    pub fn set_problem(&mut self, name: ProblemName) {
+        self.cur_problem_creator = name.to_index();
+    }
+    pub fn get_cur_problem(&self) -> Option<ProblemName> {
+        ProblemName::from_index(self.cur_problem_creator)
+    }
 
-    pub fn view_name_to_message(&self, name: &str) -> Message {
-        match name {
-            "Area" => Message::SwitchToView(0),
-            "Fredholm 1st Kind" => Message::SwitchToView(1),
-            "Wolterra 2nd Kind" => Message::SwitchToView(2),
-            _ => unreachable!(),
+    pub fn fields(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.cur().form().get_fields()
+    }
+    pub fn set_field(&mut self, name: &str, val: String) {
+        self.mut_cur().form_mut().set(name, val);
+    }
+    pub fn get_validation_errors(&self) -> &[ValidationError] {
+        &self.validation_errors
+    }
+
+    pub fn validate(&mut self) {
+        self.validation_errors.clear();
+        self.prepared_problem = match self.cur().try_create() {
+            Ok(p) => Some(p),
+            Err(e) => {
+                self.validation_errors = e;
+                None
+            }
+        }
+    }
+    pub fn solve(&mut self) {
+        match &self.prepared_problem {
+            Some(p) => {
+                let res = p.solve();
+                dbg!(&res);
+                self.solutions.push_back(res);
+            }
+            None => {}
         }
     }
 
-    pub fn get_result(&self) -> &[DisplayedResult] {
-        &self.displayed_result
+    pub fn get_solutions(&self) -> impl Iterator<Item = &Solution> {
+        self.solutions.iter()
     }
-
-    pub fn get_runtime_errors(&self) -> &[String] {
-        &self.runtime_errors
-    }
-
-    pub fn get_field_errors(&self) -> &[(String, String)] {
-        &self.field_errors
-    }
-
-    pub fn get_field_val(&self, field: &str) -> Option<&str> {
-        self.cur_view().get_field(field)
+    pub fn rem_solution(&mut self, index: usize) {
+        let mut split_list = self.solutions.split_off(index);
+        split_list.pop_front();
+        self.solutions.append(&mut split_list);
     }
 }

@@ -3,19 +3,19 @@ use std::fmt::Write;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
-    IoError(String),
+    Io(String),
     PointOutOfBounds { x: f64, min: f64, max: f64 },
     NoKnownPoints,
 }
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
-        Error::IoError(e.to_string())
+        Error::Io(e.to_string())
     }
 }
 
 impl From<std::fmt::Error> for Error {
     fn from(e: std::fmt::Error) -> Self {
-        Error::IoError(e.to_string())
+        Error::Io(e.to_string())
     }
 }
 
@@ -36,18 +36,8 @@ impl Spline {
     pub fn write_coefs(&self) -> Result<String, Error> {
         let mut s = String::new();
 
-        for (i, (a, b, c, d)) in self.coefs.iter().enumerate() {
+        for (a, b, c, d) in self.coefs.iter() {
             writeln!(s, "{},{},{},{}", a, b, c, d)?;
-
-            println!(
-                "{}+{}x+{}x^2+{}x^3 \\left\\{{{}<x<{}\\right\\}}",
-                a,
-                b,
-                c,
-                d,
-                self.pts[i].0,
-                self.pts[i + 1].0,
-            );
         }
 
         Ok(s)
