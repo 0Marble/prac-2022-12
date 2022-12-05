@@ -65,15 +65,6 @@ pub trait FunctionNd {
             .collect();
 
         for _ in 0..total_iter_count {
-            for i in 0..n.len() {
-                if iter[i] + 1 < n[i] {
-                    iter[i] += 1;
-                    break;
-                } else {
-                    iter[i] = 0;
-                }
-            }
-
             let mut coords: Vec<f64> = steps
                 .iter()
                 .enumerate()
@@ -81,6 +72,13 @@ pub trait FunctionNd {
                 .collect();
             coords.push(self.apply(&coords)?);
             pts.push(coords);
+
+            for i in 0..n.len() {
+                iter[i] = (iter[i] + 1) % n[i];
+                if iter[i] != 0 {
+                    break;
+                }
+            }
         }
 
         Ok(pts)
