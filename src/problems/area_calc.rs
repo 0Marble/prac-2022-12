@@ -11,7 +11,7 @@ use super::{
     ValidationError,
 };
 
-pub struct AreaCalcProblem {
+struct AreaCalcProblem {
     f1: Box<dyn Expression>,
     f2: Box<dyn Expression>,
     f3: Box<dyn Expression>,
@@ -42,10 +42,30 @@ impl Problem for AreaCalcProblem {
 
         match res {
             Ok(area) => {
-                let mut expl = vec![SolutionParagraph::Text(format!(
-                    "Area = {:.4}, x12 = {:.4}, x13 = {:.4}, x23 = {:.4}",
-                    area.area, area.x12, area.x13, area.x23
-                ))];
+                let mut expl = vec![
+                    SolutionParagraph::Text(format!(
+                        "Area = {:.4}, x12 = {:.4}, x13 = {:.4}, x23 = {:.4}",
+                        area.area, area.x12, area.x13, area.x23
+                    )),
+                    SolutionParagraph::Latex(format!(
+                        "f_1(x)={{{}}}",
+                        self.f1
+                            .to_latex(&DefaultRuntime::default())
+                            .unwrap_or_else(|_| String::new())
+                    )),
+                    SolutionParagraph::Latex(format!(
+                        "f_2(x)={{{}}}",
+                        self.f2
+                            .to_latex(&DefaultRuntime::default())
+                            .unwrap_or_else(|_| String::new())
+                    )),
+                    SolutionParagraph::Latex(format!(
+                        "f_3(x)={{{}}}",
+                        self.f3
+                            .to_latex(&DefaultRuntime::default())
+                            .unwrap_or_else(|_| String::new())
+                    )),
+                ];
 
                 let p1 = f1.sample(
                     f64::min(self.x12[0], self.x13[0]),
@@ -160,7 +180,7 @@ impl Default for AreaCalcProblemCreator {
         form.set("x13_from", "-4".to_string());
         form.set("x13_to", "-1".to_string());
         form.set("x23_from", "-2".to_string());
-        form.set("x23_to", "-0.1".to_string());
+        form.set("x23_to", "-0.3".to_string());
         form.set("eps", "0.001".to_string());
         form.set("max_iter_count", "1000".to_string());
 
@@ -169,14 +189,6 @@ impl Default for AreaCalcProblemCreator {
 }
 
 impl ProblemCreator for AreaCalcProblemCreator {
-    fn form(&self) -> &Form {
-        &self.form
-    }
-
-    fn form_mut(&mut self) -> &mut Form {
-        &mut self.form
-    }
-
     fn try_create(&self) -> Result<Box<dyn Problem>, Vec<ValidationError>> {
         let mut f1 = None;
         let mut f2 = None;
@@ -194,9 +206,9 @@ impl ProblemCreator for AreaCalcProblemCreator {
 
         for (name, val) in self.form.get_fields() {
             let res = match name {
-                "f1" => validate_expr("f1", val, &["x"], &DefaultRuntime::default(), &mut f1),
-                "f2" => validate_expr("f2", val, &["x"], &DefaultRuntime::default(), &mut f2),
-                "f3" => validate_expr("f3", val, &["x"], &DefaultRuntime::default(), &mut f3),
+                "f1" => validate_expr("f1", val, Some(&["x"]), &DefaultRuntime::default(), &mut f1),
+                "f2" => validate_expr("f2", val, Some(&["x"]), &DefaultRuntime::default(), &mut f2),
+                "f3" => validate_expr("f3", val, Some(&["x"]), &DefaultRuntime::default(), &mut f3),
                 "x12_from" => validate_from_str::<f64>("x12_from", val, &mut x12_from),
                 "x12_to" => validate_from_str::<f64>("x12_to", val, &mut x12_to),
                 "x13_from" => validate_from_str::<f64>("x13_from", val, &mut x13_from),
@@ -276,5 +288,13 @@ impl ProblemCreator for AreaCalcProblemCreator {
         } else {
             Err(errors)
         }
+    }
+
+    fn fields(&self) -> super::form::FieldsIter {
+        self.form.get_fields()
+    }
+
+    fn set_field(&mut self, name: &str, val: String) {
+        self.form.set(name, val)
     }
 }

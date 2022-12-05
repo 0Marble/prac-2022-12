@@ -3,7 +3,7 @@ use std::fmt::Debug;
 
 use super::Error;
 
-pub fn wolterra_2nd_system<E1, E2>(
+pub fn volterra_2nd_system<E1, E2>(
     kernel: &dyn Function2d<Error = E1>,
     right_side: &dyn Function<Error = E2>,
     from: f64,
@@ -69,7 +69,7 @@ fn wolterra_2nd() -> Result<(), Error> {
     let to = 1.0;
     let lambda = 1.0;
     let n = 50;
-    let res = wolterra_2nd_system(&k, &f, from, to, lambda, n)?;
+    let res = volterra_2nd_system(&k, &f, from, to, lambda, n)?;
 
     let eps = 0.001;
     let res_pts = res.sample(from, to, n)?;

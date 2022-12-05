@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, slice::Iter};
 
 pub struct Form {
     fields: HashMap<String, String>,
@@ -19,17 +19,37 @@ impl Form {
         }
     }
 
-    pub fn get_fields(&self) -> impl Iterator<Item = (&str, &str)> {
-        self.field_names
-            .iter()
-            .map(|n| self.fields.get_key_value(n).unwrap())
-            .map(|(name, val)| (name.as_str(), val.as_str()))
+    pub fn get(&self, name: &str) -> Option<&String> {
+        self.fields.get(name)
     }
 
-    pub fn add_field(&mut self, name: &str) {
-        if !self.fields.contains_key(name) {
-            self.field_names.push(name.to_string());
-            self.fields.insert(name.to_string(), "".to_string());
+    pub fn get_fields(&self) -> FieldsIter {
+        FieldsIter {
+            field_names: self.field_names.iter(),
+            fields: &self.fields,
         }
+    }
+
+    pub fn add_field(&mut self, name: String) {
+        if let std::collections::hash_map::Entry::Vacant(e) = self.fields.entry(name.clone()) {
+            self.field_names.push(name);
+            e.insert("".to_string());
+        }
+    }
+}
+
+pub struct FieldsIter<'a> {
+    field_names: Iter<'a, String>,
+    fields: &'a HashMap<String, String>,
+}
+
+impl<'a> Iterator for FieldsIter<'a> {
+    type Item = (&'a str, &'a str);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.field_names
+            .next()
+            .map(|name| self.fields.get_key_value(name).unwrap())
+            .map(|(name, val)| (name.as_str(), val.as_str()))
     }
 }

@@ -1,7 +1,8 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PathKind {
     Line,
     Filled,
+    Dot,
 }
 
 #[derive(Debug)]
@@ -66,9 +67,17 @@ impl Graph {
             .filter_map(|p| p.pts.iter().map(|(_, x)| *x).reduce(f64::max))
             .reduce(f64::max)?;
 
+        // if paths
+        //     .iter()
+        //     .filter(|p| p.kind == PathKind::Dot)
+        //     .all(|p| p.pts.len() == 1)
+        // {
         Some(Self {
             paths,
-            viewport: Viewport::new(left, right, bottom, top),
+            viewport: Viewport::new(left - 1.0, right + 1.0, bottom - 1.0, top + 1.0),
         })
+        // } else {
+        //     None
+        // }
     }
 }

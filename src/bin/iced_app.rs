@@ -1,9 +1,13 @@
+use std::{collections::HashMap, process::Command};
+
 use iced::{
     theme,
     widget::{
         button, canvas,
         canvas::{Cache, Path, Program, Stroke},
-        column, pick_list, row, scrollable, text, text_input, Rule,
+        column, image,
+        image::Handle,
+        pick_list, row, scrollable, text, text_input, Rule,
     },
     Color, Element, Length, Point, Sandbox, Settings, Theme,
 };
@@ -19,6 +23,7 @@ extern crate iced;
 
 struct App {
     state: AppState,
+    image_handles: HashMap<String, Result<Handle, String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,7 +52,12 @@ impl Program<Message> for Graph {
                 let path = Path::new(|path| {
                     for (x, y) in &p.pts {
                         let (x, y) = Viewport::convert(&self.viewport, &bounds_viewport, (*x, *y));
-                        path.line_to(Point::new(x as f32, y as f32));
+
+                        if p.kind == PathKind::Dot {
+                            path.circle(Point::new(x as f32, y as f32), 3.0);
+                        } else {
+                            path.line_to(Point::new(x as f32, y as f32));
+                        }
                     }
                 });
 
@@ -58,7 +68,7 @@ impl Program<Message> for Graph {
                             .with_color(Color::from_rgb(p.color.0, p.color.1, p.color.2))
                             .with_width(2.0),
                     ),
-                    PathKind::Filled => {
+                    PathKind::Filled | PathKind::Dot => {
                         frame.fill(&path, Color::from_rgb(p.color.0, p.color.1, p.color.2))
                     }
                 }
@@ -85,7 +95,9 @@ impl Program<Message> for Graph {
 
                 frame.stroke(
                     &path,
-                    Stroke::default().with_color(Color::BLACK).with_width(1.0),
+                    Stroke::default()
+                        .with_color(Color::BLACK)
+                        .with_width(if i == 0 { 2.0 } else { 1.0 }),
                 );
             }
 
@@ -108,7 +120,9 @@ impl Program<Message> for Graph {
 
                 frame.stroke(
                     &path,
-                    Stroke::default().with_color(Color::BLACK).with_width(1.0),
+                    Stroke::default()
+                        .with_color(Color::BLACK)
+                        .with_width(if i == 0 { 2.0 } else { 1.0 }),
                 );
             }
 
@@ -128,6 +142,7 @@ impl Sandbox for App {
     fn new() -> Self {
         App {
             state: AppState::default(),
+            image_handles: HashMap::new(),
         }
     }
 
@@ -143,7 +158,41 @@ impl Sandbox for App {
             }
             Message::Solve => {
                 self.state.validate();
-                self.state.solve();
+                let cur_solution = self.state.solve();
+
+                match cur_solution {
+                    Some(solution) => {
+                        for par in &solution.explanation {
+                            if let SolutionParagraph::Latex(s) = par {
+                                self.image_handles.insert(
+                                    s.to_string(),
+                                    if cfg!(target_os = "linux") {
+                                        Command::new("pnglatex")
+                                            .current_dir("images")
+                                            .args(["-f", s, "-d", "400"])
+                                            .output()
+                                            .map_err(|e| format!("{e} - install pnglatex"))
+                                            .and_then(|out| {
+                                                if out.status.success() {
+                                                    Ok(out)
+                                                } else {
+                                                    Err(format!("pnglatex error {:?}", out))
+                                                }
+                                            })
+                                            .and_then(|out| {
+                                                String::from_utf8(out.stdout)
+                                                    .map_err(|e| e.to_string())
+                                            })
+                                            .map(|path| Handle::from_path(path.trim()))
+                                    } else {
+                                        Err("can not render latex, unsupported os".to_string())
+                                    },
+                                );
+                            }
+                        }
+                    }
+                    None => todo!(),
+                }
             }
             Message::None => {}
             Message::ClearSolution { index } => self.state.rem_solution(index),
@@ -223,6 +272,15 @@ impl Sandbox for App {
                         SolutionParagraph::RuntimeError(e) => {
                             Element::from(text(e).style(Color::from_rgb(1.0, 0.0, 0.0)))
                         }
+                        SolutionParagraph::Latex(s) => self
+                            .image_handles
+                            .get(s)
+                            .ok_or_else(|| format!("no image for {s}"))
+                            .cloned()
+                            .and_then(|handle| handle)
+                            .map(|handle| image(handle).height(Length::Units(30)))
+                            .map_err(|e| text(e).style(Color::from_rgb(1.0, 0.0, 0.0)))
+                            .map_or_else(Element::from, Element::from),
                     })
                     .collect::<Vec<_>>()
             })
@@ -252,5 +310,11 @@ impl Sandbox for App {
 fn main() {
     let mut settings = Settings::default();
     settings.window.size = (640, 480);
-    App::run(settings).expect("Error: ")
+
+    let _ = std::fs::create_dir("images")
+        .map_err(|e| println!("Could not create images folder: {}", e));
+    App::run(settings)
+        .map_err(|e| e.to_string())
+        .and_then(|_| std::fs::remove_dir_all("images").map_err(|e| e.to_string()))
+        .expect("Error: ")
 }

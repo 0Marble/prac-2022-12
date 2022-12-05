@@ -1,6 +1,6 @@
 mod conjugate_gradients;
 pub mod fredholm_first_kind;
-pub mod wolterra_second_kind;
+pub mod volterra_second_kind;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {

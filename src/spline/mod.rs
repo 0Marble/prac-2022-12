@@ -36,7 +36,18 @@ impl Spline {
     pub fn write_coefs(&self) -> Result<String, Error> {
         let mut s = String::new();
 
-        for (a, b, c, d) in self.coefs.iter() {
+        for (_i, (a, b, c, d)) in self.coefs.iter().enumerate() {
+            // writeln!(
+            //     s,
+            //     "{}+{}x+{}x^2+{}x^3 \\left\\{{ {}<x<{} \\right\\}}",
+            //     a,
+            //     b,
+            //     c,
+            //     d,
+            //     self.pts[_i].0,
+            //     self.pts[_i + 1].0
+            // )?;
+
             writeln!(s, "{},{},{},{}", a, b, c, d)?;
         }
 
@@ -47,16 +58,16 @@ impl Spline {
 impl Function for Spline {
     type Error = Error;
 
-    fn apply(&self, arg: f64) -> Result<f64, Self::Error> {
+    fn apply(&self, x: f64) -> Result<f64, Self::Error> {
         if self.pts.is_empty() {
             return Err(Error::NoKnownPoints);
         }
 
         for i in 1..self.pts.len() {
-            let (x, _) = self.pts[i];
+            let (cur_x, _) = self.pts[i];
             let (prev_x, _) = self.pts[i - 1];
 
-            if prev_x <= arg && x >= arg {
+            if prev_x <= x && cur_x >= x {
                 let (a, b, c, d) = self.coefs[i - 1];
                 let val = d * x * x * x + c * x * x + b * x + a;
                 return Ok(val);
@@ -64,7 +75,7 @@ impl Function for Spline {
         }
 
         Err(Error::PointOutOfBounds {
-            x: arg,
+            x,
             min: self.pts.first().unwrap().0,
             max: self.pts.last().unwrap().0,
         })
@@ -160,12 +171,25 @@ fn spline() -> Result<(), Error> {
     spline.write_coefs()?;
 
     let check_n = n * 10;
-    let check_step = (to - from) / (check_n as f64);
+    // let check_step = (to - from) / (check_n as f64);
 
     let eps = 0.1;
-    assert!((0..=check_n)
-        .map(|i| (i as f64) * check_step)
-        .map(|x| (x.sin() - spline.apply(x).unwrap()).abs())
+    // assert!((0..=check_n)
+    //     .map(|i| (i as f64) * check_step)
+    //     .map(|x| (x.sin() - spline.apply(x).unwrap()).abs())
+    //     .all(|diff| diff < eps));
+
+    assert!(spline
+        .sample(from, to, check_n)
+        .unwrap()
+        .iter()
+        .zip(
+            (|x: f64| -> Result<f64, ()> { Ok(x.sin()) })
+                .sample(from, to, check_n)
+                .unwrap()
+                .iter()
+        )
+        .map(|((_, a), (_, b))| (a - b).abs())
         .all(|diff| diff < eps));
 
     Ok(())

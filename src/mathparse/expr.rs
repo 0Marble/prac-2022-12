@@ -20,11 +20,13 @@ pub trait Runtime {
     fn get_var(&self, name: &str) -> Option<f64>;
     fn eval_func(&self, name: &str, args: &[f64]) -> Result<f64, Error>;
     fn has_func(&self, name: &str) -> bool;
+    fn to_latex(&self, name: &str, args: &[String]) -> Result<String, Error>;
 }
 
 pub trait Expression: Debug {
     fn eval(&self, runtime: &dyn Runtime) -> Result<f64, Error>;
     fn query_vars(&self) -> HashSet<&str>;
+    fn to_latex(&self, runtime: &dyn Runtime) -> Result<String, Error>;
 }
 
 impl Expression for f64 {
@@ -34,6 +36,10 @@ impl Expression for f64 {
 
     fn query_vars(&self) -> HashSet<&str> {
         HashSet::new()
+    }
+
+    fn to_latex(&self, _: &dyn Runtime) -> Result<String, Error> {
+        Ok(self.to_string())
     }
 }
 
@@ -57,6 +63,10 @@ impl Expression for Variable {
 
     fn query_vars(&self) -> HashSet<&str> {
         HashSet::from([self.name.as_str()])
+    }
+
+    fn to_latex(&self, _: &dyn Runtime) -> Result<String, Error> {
+        Ok(self.name.clone())
     }
 }
 
@@ -104,6 +114,35 @@ impl Expression for BasicOp {
             BasicOp::Negate(l) => l.query_vars(),
         }
     }
+
+    fn to_latex(&self, runtime: &dyn Runtime) -> Result<String, Error> {
+        match self {
+            BasicOp::Plus(l, r) => {
+                let l = l.to_latex(runtime)?;
+                let r = r.to_latex(runtime)?;
+                Ok(format!("{{{}}}+{{{}}}", l, r))
+            }
+            BasicOp::Minus(l, r) => {
+                let l = l.to_latex(runtime)?;
+                let r = r.to_latex(runtime)?;
+                Ok(format!("{{{}}}-{{{}}}", l, r))
+            }
+            BasicOp::Multiply(l, r) => {
+                let l = l.to_latex(runtime)?;
+                let r = r.to_latex(runtime)?;
+                Ok(format!("{{{}}}\\cdot{{{}}}", l, r))
+            }
+            BasicOp::Divide(l, r) => {
+                let l = l.to_latex(runtime)?;
+                let r = r.to_latex(runtime)?;
+                Ok(format!("{{{}}}\\over{{{}}}", l, r))
+            }
+            BasicOp::Negate(r) => {
+                let r = r.to_latex(runtime)?;
+                Ok(format!("-{{{}}}", r))
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -136,6 +175,15 @@ impl Expression for FunctionExpression {
             .fold(HashSet::new(), |acc, vars| {
                 acc.union(&vars).copied().collect()
             })
+    }
+
+    fn to_latex(&self, runtime: &dyn Runtime) -> Result<String, Error> {
+        let args = self
+            .args
+            .iter()
+            .map(|a| a.to_latex(runtime))
+            .collect::<Result<Vec<_>, _>>()?;
+        runtime.to_latex(&self.name, &args)
     }
 }
 
@@ -244,6 +292,89 @@ impl Runtime for DefaultRuntime {
                     })
                 } else {
                     Ok(args[0].abs())
+                }
+            }
+            _ => Err(Error::UndefinedFunction(name.to_string())),
+        }
+    }
+
+    fn to_latex(&self, name: &str, args: &[String]) -> Result<String, Error> {
+        match name {
+            "sin" => {
+                if args.len() != 1 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "sin".to_string(),
+                        got_args: args.len(),
+                        expected_args: 1,
+                    })
+                } else {
+                    Ok(format!("sin({{{}}})", args[0]))
+                }
+            }
+            "cos" => {
+                if args.len() != 1 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "cos".to_string(),
+                        got_args: args.len(),
+                        expected_args: 1,
+                    })
+                } else {
+                    Ok(format!("cos({{{}}})", args[0]))
+                }
+            }
+            "pow" => {
+                if args.len() != 2 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "pow".to_string(),
+                        got_args: args.len(),
+                        expected_args: 2,
+                    })
+                } else {
+                    Ok(format!("({{{}}})^{{{}}}", args[0], args[1]))
+                }
+            }
+            "sqrt" => {
+                if args.len() != 1 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "sqrt".to_string(),
+                        got_args: args.len(),
+                        expected_args: 1,
+                    })
+                } else {
+                    Ok(format!("\\sqrt{{{}}}", args[0]))
+                }
+            }
+            "exp" => {
+                if args.len() != 1 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "exp".to_string(),
+                        got_args: args.len(),
+                        expected_args: 1,
+                    })
+                } else {
+                    Ok(format!("e^{{{}}}", args[0]))
+                }
+            }
+            "ln" => {
+                if args.len() != 1 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "ln".to_string(),
+                        got_args: args.len(),
+                        expected_args: 1,
+                    })
+                } else {
+                    Ok(format!("ln({{{}}})", args[0]))
+                }
+            }
+            "abs" => {
+                if args.len() != 1 {
+                    Err(Error::InvalidArgCount {
+                        op_name: "abs".to_string(),
+                        got_args: args.len(),
+                        expected_args: 1,
+                    })
+                } else {
+                    Ok(format!("|{{{}}}|", args[0]))
                 }
             }
             _ => Err(Error::UndefinedFunction(name.to_string())),

@@ -2,7 +2,9 @@ use std::collections::LinkedList;
 
 use crate::problems::{
     area_calc::AreaCalcProblemCreator, fredholm_1st::Fredholm1stProblemCreator,
-    wolterra_2nd::Wolterra2ndProblemCreator, Problem, ProblemCreator, Solution, ValidationError,
+    gradients_min::GradientsMinProblemCreator, penalty_min::PenaltyMinProblemCreator,
+    spline::SplineProblemCreator, volterra_2nd::Volterra2ndProblemCreator, Problem, ProblemCreator,
+    Solution, ValidationError,
 };
 
 pub struct AppState {
@@ -19,7 +21,10 @@ impl Default for AppState {
             problem_creators: vec![
                 Box::new(Fredholm1stProblemCreator::default()),
                 Box::new(AreaCalcProblemCreator::default()),
-                Box::new(Wolterra2ndProblemCreator::default()),
+                Box::new(Volterra2ndProblemCreator::default()),
+                Box::new(PenaltyMinProblemCreator::default()),
+                Box::new(SplineProblemCreator::default()),
+                Box::new(GradientsMinProblemCreator::default()),
             ],
             cur_problem_creator: 0,
             prepared_problem: None,
@@ -34,6 +39,9 @@ pub enum ProblemName {
     FredholmFirst,
     AreaCalc,
     WolterraSecond,
+    PenaltyMin,
+    Spline,
+    GradientsMin,
 }
 
 impl ProblemName {
@@ -42,6 +50,9 @@ impl ProblemName {
             ProblemName::FredholmFirst => 0,
             ProblemName::AreaCalc => 1,
             ProblemName::WolterraSecond => 2,
+            ProblemName::PenaltyMin => 3,
+            ProblemName::Spline => 4,
+            ProblemName::GradientsMin => 5,
         }
     }
     fn from_index(index: usize) -> Option<Self> {
@@ -49,6 +60,9 @@ impl ProblemName {
             0 => Some(ProblemName::FredholmFirst),
             1 => Some(ProblemName::AreaCalc),
             2 => Some(ProblemName::WolterraSecond),
+            3 => Some(ProblemName::PenaltyMin),
+            4 => Some(ProblemName::Spline),
+            5 => Some(ProblemName::GradientsMin),
             _ => None,
         }
     }
@@ -60,6 +74,9 @@ impl ToString for ProblemName {
             ProblemName::FredholmFirst => "Fredholm first kind".to_string(),
             ProblemName::AreaCalc => "Area".to_string(),
             ProblemName::WolterraSecond => "Wolterra second kind".to_string(),
+            ProblemName::PenaltyMin => "Constrained minimum".to_string(),
+            ProblemName::Spline => "Spline".to_string(),
+            ProblemName::GradientsMin => "Gradients minimum".to_string(),
         }
     }
 }
@@ -77,6 +94,9 @@ impl AppState {
             ProblemName::FredholmFirst,
             ProblemName::AreaCalc,
             ProblemName::WolterraSecond,
+            ProblemName::PenaltyMin,
+            ProblemName::Spline,
+            ProblemName::GradientsMin,
         ]
     }
     pub fn set_problem(&mut self, name: ProblemName) {
@@ -87,10 +107,10 @@ impl AppState {
     }
 
     pub fn fields(&self) -> impl Iterator<Item = (&str, &str)> {
-        self.cur().form().get_fields()
+        self.cur().fields()
     }
     pub fn set_field(&mut self, name: &str, val: String) {
-        self.mut_cur().form_mut().set(name, val);
+        self.mut_cur().set_field(name, val);
     }
     pub fn get_validation_errors(&self) -> &[ValidationError] {
         &self.validation_errors
@@ -106,14 +126,14 @@ impl AppState {
             }
         }
     }
-    pub fn solve(&mut self) {
+    pub fn solve(&mut self) -> Option<&Solution> {
         match &self.prepared_problem {
             Some(p) => {
                 let res = p.solve();
-                dbg!(&res);
                 self.solutions.push_back(res);
+                self.solutions.back()
             }
-            None => {}
+            None => None,
         }
     }
 

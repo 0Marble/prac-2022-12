@@ -93,6 +93,14 @@ impl TableFunction {
     pub fn to_table(&self) -> Vec<(f64, f64)> {
         self.sorted_table.clone()
     }
+
+    pub fn min_x(&self) -> Option<f64> {
+        self.sorted_table.first().cloned().map(|(x, _)| x)
+    }
+
+    pub fn max_x(&self) -> Option<f64> {
+        self.sorted_table.last().cloned().map(|(x, _)| x)
+    }
 }
 
 fn larp(min_x: f64, max_x: f64, x: f64, from_y: f64, to_y: f64) -> f64 {
