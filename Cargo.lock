@@ -1000,6 +1000,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "iced-app"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "prac-2022-11",
+]
+
+[[package]]
 name = "iced_core"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1859,9 +1867,6 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 [[package]]
 name = "prac-2022-11"
 version = "0.1.0"
-dependencies = [
- "iced",
-]
 
 [[package]]
 name = "proc-macro-crate"

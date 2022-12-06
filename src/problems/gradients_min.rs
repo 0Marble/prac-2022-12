@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    common::function::FunctionNd,
+    function::function::FunctionNd,
     mathparse::{parse, DefaultRuntime, Error, Expression},
     min_find::gradients_min::gradients_min,
 };

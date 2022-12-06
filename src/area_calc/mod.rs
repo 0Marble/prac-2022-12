@@ -3,7 +3,7 @@ use std::fmt::Debug;
 mod secant_method_root;
 mod simpson_integrator;
 
-use crate::common::function::Function;
+use crate::function::function::Function;
 use secant_method_root::root;
 use simpson_integrator::integrate_step;
 

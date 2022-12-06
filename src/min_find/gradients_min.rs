@@ -1,6 +1,6 @@
 use std::{cell::RefCell, fmt::Debug};
 
-use crate::common::function::{Function, FunctionNd};
+use crate::function::function::{Function, FunctionNd};
 
 use super::{golden_ratio_min::golden_ratio_min, MinimumNd};
 

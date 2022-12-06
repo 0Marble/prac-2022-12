@@ -164,8 +164,7 @@ impl Sandbox for App {
                     Some(solution) => {
                         for par in &solution.explanation {
                             if let SolutionParagraph::Latex(s) = par {
-                                self.image_handles.insert(
-                                    s.to_string(),
+                                self.image_handles.entry(s.to_string()).or_insert(
                                     if cfg!(target_os = "linux") {
                                         Command::new("pnglatex")
                                             .current_dir("images")

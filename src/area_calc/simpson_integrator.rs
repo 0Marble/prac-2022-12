@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::common::function::Function;
+use crate::function::function::Function;
 
 use super::Error;
 

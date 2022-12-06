@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::common::function::Function;
+use crate::function::function::Function;
 
 use super::{golden_ratio_min::golden_ratio_min, Minimum1d};
 

@@ -1,6 +1,6 @@
 use crate::{
     area_calc::calc_area,
-    common::function::Function,
+    function::function::Function,
     mathparse::{DefaultRuntime, Expression},
 };
 

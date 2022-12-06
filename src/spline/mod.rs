@@ -1,4 +1,4 @@
-use crate::common::function::Function;
+use crate::function::function::Function;
 use std::fmt::Write;
 
 #[derive(Debug, Clone, PartialEq)]
