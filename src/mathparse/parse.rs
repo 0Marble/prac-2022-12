@@ -58,7 +58,7 @@ fn read_number(src: &str) -> Option<(f64, &str)> {
     let (before_dot, before_dot_str_size) = src
         .char_indices()
         .map_while(|(i, c)| c.to_digit(10).map(|d| (d, i)))
-        .fold((0, 0), |(acc, _), (d, i)| (acc * 10 + d, i + 1));
+        .fold((0.0, 0), |(acc, _), (d, i)| (acc * 10.0 + d as f64, i + 1));
     if before_dot_str_size == 0 {
         return None;
     }
@@ -67,15 +67,15 @@ fn read_number(src: &str) -> Option<(f64, &str)> {
         let (after_dot, after_dot_divisor, after_dot_str_size) = next
             .char_indices()
             .map_while(|(i, c)| c.to_digit(10).map(|d| (d, i)))
-            .fold((0, 1, 0), |(acc, divisor, _), (d, i)| {
-                (acc * 10 + d, divisor * 10, i + 1)
+            .fold((0.0, 1, 0), |(acc, divisor, _), (d, i)| {
+                (acc * 10.0 + d as f64, divisor * 10, i + 1)
             });
         if after_dot_str_size == 0 {
             return None;
         }
 
         Some((
-            before_dot as f64 + (after_dot as f64) / (after_dot_divisor as f64),
+            before_dot + after_dot / (after_dot_divisor as f64),
             &next[after_dot_str_size..],
         ))
     } else {
