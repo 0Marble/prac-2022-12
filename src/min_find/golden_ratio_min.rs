@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::function::function::Function;
+use crate::functions::function::Function;
 
 use super::Minimum1d;
 

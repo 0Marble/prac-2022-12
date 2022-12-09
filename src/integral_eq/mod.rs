@@ -7,7 +7,7 @@ pub enum Error {
     FunctionError(String),
 }
 
-use crate::function::table_function::Error as TableFunctionError;
+use crate::functions::table_function::Error as TableFunctionError;
 
 impl From<TableFunctionError> for Error {
     fn from(e: TableFunctionError) -> Self {

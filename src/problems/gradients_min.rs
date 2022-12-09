@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    function::function::FunctionNd,
+    functions::function::FunctionNd,
     mathparse::{parse, DefaultRuntime, Error, Expression},
     min_find::gradients_min::gradients_min,
 };
@@ -210,63 +210,58 @@ impl ProblemCreator for GradientsMinProblemCreator {
             .collect::<Vec<_>>();
 
         for (name, val) in self.fields() {
-            let res = match name {
-                "f" => validate_expr(
-                    name,
-                    val,
-                    Some(&allowed_vars),
-                    &DefaultRuntime::default(),
-                    &mut f,
-                ),
-                "eps" => validate_from_str::<f64>(name, val, &mut eps),
-                "max_iter_count" => validate_from_str::<usize>(name, val, &mut max_iter_count),
-                _ => {
-                    if let Some(var_name) = name.strip_suffix('0') {
-                        let mut var_value = None;
-                        let res = validate_from_str::<f64>(name, val, &mut var_value);
-                        if let Err(e) = res {
-                            Err(e)
-                        } else {
-                            match self.ordered_vars.iter().find(|name| name.eq(&var_name)) {
-                                Some(_) => {
-                                    x0.insert(var_name.to_string(), var_value.unwrap());
-                                    Ok(())
+            let res =
+                match name {
+                    "f" => validate_expr(
+                        name,
+                        val,
+                        Some(&allowed_vars),
+                        &DefaultRuntime::default(),
+                        &mut f,
+                    ),
+                    "eps" => validate_from_str::<f64>(name, val, &mut eps),
+                    "max_iter_count" => validate_from_str::<usize>(name, val, &mut max_iter_count),
+                    _ => {
+                        if let Some(var_name) = name.strip_suffix('0') {
+                            let mut var_value = None;
+                            validate_from_str::<f64>(name, val, &mut var_value).and_then(|_| {
+                                match self.ordered_vars.iter().find(|name| name.eq(&var_name)) {
+                                    Some(_) => {
+                                        x0.insert(var_name.to_string(), var_value.unwrap());
+                                        Ok(())
+                                    }
+                                    None => Err(ValidationError(format!(
+                                        "{name} - no such field (probably a devs error) "
+                                    ))),
                                 }
-                                None => Err(ValidationError(format!(
-                                    "{name} - no such field (probably a devs error) "
-                                ))),
-                            }
-                        }
-                    } else if let Some(var_name) = name.strip_prefix("df/d") {
-                        let mut var_value = None;
-                        let res = validate_expr(
-                            name,
-                            val,
-                            Some(&allowed_vars),
-                            &DefaultRuntime::default(),
-                            &mut var_value,
-                        );
-
-                        if let Err(e) = res {
-                            Err(e)
-                        } else {
-                            match self.ordered_vars.iter().find(|name| name.eq(&var_name)) {
-                                Some(_) => {
-                                    grad.insert(var_name.to_string(), var_value.unwrap());
-                                    Ok(())
+                            })
+                        } else if let Some(var_name) = name.strip_prefix("df/d") {
+                            let mut var_value = None;
+                            validate_expr(
+                                name,
+                                val,
+                                Some(&allowed_vars),
+                                &DefaultRuntime::default(),
+                                &mut var_value,
+                            )
+                            .and_then(|_| {
+                                match self.ordered_vars.iter().find(|name| name.eq(&var_name)) {
+                                    Some(_) => {
+                                        grad.insert(var_name.to_string(), var_value.unwrap());
+                                        Ok(())
+                                    }
+                                    None => Err(ValidationError(format!(
+                                        "{name} - no such field (probably a devs error) "
+                                    ))),
                                 }
-                                None => Err(ValidationError(format!(
-                                    "{name} - no such field (probably a devs error) "
-                                ))),
-                            }
+                            })
+                        } else {
+                            Err(ValidationError(format!(
+                                "{name} - no such field (probably a devs error)"
+                            )))
                         }
-                    } else {
-                        Err(ValidationError(format!(
-                            "{name} - no such field (probably a devs error)"
-                        )))
                     }
-                }
-            };
+                };
 
             match res {
                 Ok(_) => {}

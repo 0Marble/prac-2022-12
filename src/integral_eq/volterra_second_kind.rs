@@ -1,4 +1,4 @@
-use crate::function::{function::*, table_function::TableFunction};
+use crate::functions::{function::*, table_function::TableFunction};
 use std::fmt::Debug;
 
 use super::Error;

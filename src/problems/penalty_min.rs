@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    function::function::Function,
+    functions::function::Function,
     mathparse::{DefaultRuntime, Error, Expression},
     min_find::penalty_min::penalty_min,
 };

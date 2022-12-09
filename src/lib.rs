@@ -1,6 +1,6 @@
 pub mod app;
 pub mod area_calc;
-pub mod function;
+pub mod functions;
 pub mod integral_eq;
 pub mod mathparse;
 pub mod min_find;

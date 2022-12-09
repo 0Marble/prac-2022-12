@@ -1,7 +1,7 @@
 use std::{fs::File, io::Write, path::Path as FilePath};
 
 use crate::{
-    function::{function::Function, table_function::TableFunction},
+    functions::{function::Function, table_function::TableFunction},
     spline::Spline,
 };
 
