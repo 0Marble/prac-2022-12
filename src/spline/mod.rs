@@ -76,8 +76,8 @@ impl Function for Spline {
 
         Err(Error::PointOutOfBounds {
             x,
-            min: self.pts.first().unwrap().0,
-            max: self.pts.last().unwrap().0,
+            min: self.pts.first().cloned().unwrap_or_default().0,
+            max: self.pts.last().cloned().unwrap_or_default().0,
         })
     }
 }
@@ -171,14 +171,8 @@ fn spline() -> Result<(), Error> {
     spline.write_coefs()?;
 
     let check_n = n * 10;
-    // let check_step = (to - from) / (check_n as f64);
 
     let eps = 0.1;
-    // assert!((0..=check_n)
-    //     .map(|i| (i as f64) * check_step)
-    //     .map(|x| (x.sin() - spline.apply(x).unwrap()).abs())
-    //     .all(|diff| diff < eps));
-
     assert!(spline
         .sample(from, to, check_n)
         .unwrap()

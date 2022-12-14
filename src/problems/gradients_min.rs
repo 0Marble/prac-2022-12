@@ -309,7 +309,11 @@ impl ProblemCreator for GradientsMinProblemCreator {
             Ok(Box::new(GradientsMinProblem {
                 ordered_vars: self.ordered_vars.clone(),
                 f: f.unwrap(),
-                grad: grad.into_values().collect(),
+                grad: self
+                    .ordered_vars
+                    .iter()
+                    .map(|var_name| grad.remove(var_name).unwrap())
+                    .collect(),
                 x0: x0.values().cloned().collect(),
                 eps: eps.unwrap(),
                 max_iter_count: max_iter_count.unwrap(),

@@ -160,37 +160,33 @@ impl Sandbox for App {
                 self.state.validate();
                 let cur_solution = self.state.solve();
 
-                match cur_solution {
-                    Some(solution) => {
-                        for par in &solution.explanation {
-                            if let SolutionParagraph::Latex(s) = par {
-                                self.image_handles.entry(s.to_string()).or_insert(
-                                    if cfg!(target_os = "linux") {
-                                        Command::new("pnglatex")
-                                            .current_dir("images")
-                                            .args(["-f", s, "-d", "400"])
-                                            .output()
-                                            .map_err(|e| format!("{e} - install pnglatex"))
-                                            .and_then(|out| {
-                                                if out.status.success() {
-                                                    Ok(out)
-                                                } else {
-                                                    Err(format!("pnglatex error {:?}", out))
-                                                }
-                                            })
-                                            .and_then(|out| {
-                                                String::from_utf8(out.stdout)
-                                                    .map_err(|e| e.to_string())
-                                            })
-                                            .map(|path| Handle::from_path(path.trim()))
-                                    } else {
-                                        Err("can not render latex, unsupported os".to_string())
-                                    },
-                                );
-                            }
+                if let Some(solution) = cur_solution {
+                    for par in &solution.explanation {
+                        if let SolutionParagraph::Latex(s) = par {
+                            self.image_handles.entry(s.to_string()).or_insert(
+                                if cfg!(target_os = "linux") {
+                                    Command::new("pnglatex")
+                                        .current_dir("images")
+                                        .args(["-f", s, "-d", "400"])
+                                        .output()
+                                        .map_err(|e| format!("{e} - install pnglatex"))
+                                        .and_then(|out| {
+                                            if out.status.success() {
+                                                Ok(out)
+                                            } else {
+                                                Err(format!("pnglatex error {:?}", out))
+                                            }
+                                        })
+                                        .and_then(|out| {
+                                            String::from_utf8(out.stdout).map_err(|e| e.to_string())
+                                        })
+                                        .map(|path| Handle::from_path(path.trim()))
+                                } else {
+                                    Err("can not render latex, unsupported os".to_string())
+                                },
+                            );
                         }
                     }
-                    None => todo!(),
                 }
             }
             Message::None => {}

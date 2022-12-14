@@ -24,10 +24,18 @@ where
     let mut f_b = f(b).map_err(|e| RootError::FunctionError(format!("{:?}", e)))?;
 
     if f_a == 0.0 {
-        return Ok((a, g.apply(a).unwrap()));
+        return Ok((
+            a,
+            g.apply(a)
+                .map_err(|e| RootError::FunctionError(format!("{:?}", e)))?,
+        ));
     }
     if f_b == 0.0 {
-        return Ok((b, g.apply(b).unwrap()));
+        return Ok((
+            b,
+            g.apply(b)
+                .map_err(|e| RootError::FunctionError(format!("{:?}", e)))?,
+        ));
     }
 
     if f_a > 0.0 && f_b < 0.0 {
@@ -46,18 +54,30 @@ where
         let c = (a * f_b - b * f_a) / (f_b - f_a);
         let f_c = f(c).map_err(|e| RootError::FunctionError(format!("{:?}", e)))?;
         if f_c == 0.0 {
-            return Ok((c, g.apply(c).unwrap()));
+            return Ok((
+                c,
+                g.apply(c)
+                    .map_err(|e| RootError::FunctionError(format!("{:?}", e)))?,
+            ));
         }
 
         if f_c > 0.0 {
             if (c - b).abs() < eps && f_c.abs() < eps {
-                return Ok((c, g.apply(c).unwrap()));
+                return Ok((
+                    c,
+                    g.apply(c)
+                        .map_err(|e| RootError::FunctionError(format!("{:?}", e)))?,
+                ));
             }
             b = c;
             f_b = f_c;
         } else {
             if (a - c).abs() < eps && f_c.abs() < eps {
-                return Ok((c, g.apply(c).unwrap()));
+                return Ok((
+                    c,
+                    g.apply(c)
+                        .map_err(|e| RootError::FunctionError(format!("{:?}", e)))?,
+                ));
             }
             a = c;
             f_a = f_c;

@@ -34,7 +34,7 @@ pub struct TableFunction {
 
 impl TableFunction {
     pub fn from_table(mut table: Vec<(f64, f64)>) -> Self {
-        table.sort_by(|(x1, _), (x2, _)| x1.partial_cmp(x2).unwrap());
+        table.sort_by(|(x1, _), (x2, _)| x1.partial_cmp(x2).unwrap_or(std::cmp::Ordering::Equal));
 
         Self {
             eps: table
@@ -133,8 +133,8 @@ impl Function for TableFunction {
 
         Err(Error::PointOutOfBounds {
             x: arg,
-            min: self.sorted_table.first().unwrap().0,
-            max: self.sorted_table.last().unwrap().0,
+            min: self.sorted_table.first().cloned().unwrap_or((0.0, 0.0)).0,
+            max: self.sorted_table.last().cloned().unwrap_or((0.0, 0.0)).0,
         })
     }
 }

@@ -58,7 +58,7 @@ where
             .map_err(|e| Error::RootError(format!("{:?}", e)))?;
 
         let mut sides = [(abx, aby, c), (acx, acy, b), (bcx, bcy, a)];
-        sides.sort_by(|(a, _, _), (b, _, _)| a.partial_cmp(b).unwrap());
+        sides.sort_by(|(a, _, _), (b, _, _)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         let slope1 = (sides[1].1 - sides[0].1) / (sides[1].0 - sides[0].0);
         let slope2 = (sides[2].1 - sides[0].1) / (sides[2].0 - sides[0].0);
